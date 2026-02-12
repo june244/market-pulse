@@ -1,0 +1,132 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap');
+
+:root {
+  --bg-primary: #0a0a0f;
+  --bg-secondary: #12121a;
+  --bg-tertiary: #1a1a28;
+  --accent-green: #00ff87;
+  --accent-red: #ff3366;
+  --accent-amber: #ffaa00;
+  --accent-blue: #00aaff;
+  --text-primary: #e8e8f0;
+  --text-secondary: #8888a0;
+  --text-dim: #555570;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html {
+  font-family: 'IBM Plex Sans', sans-serif;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  min-height: 100dvh;
+  background: var(--bg-primary);
+  overflow-x: hidden;
+  /* Safe area insets for notched devices in standalone PWA mode */
+  padding-top: env(safe-area-inset-top);
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* Prevent pull-to-refresh in standalone PWA */
+@media (display-mode: standalone) {
+  html { overscroll-behavior-y: contain; }
+}
+
+/* Disable text selection on interactive elements in PWA */
+@media (display-mode: standalone) {
+  button, a { -webkit-user-select: none; user-select: none; }
+  body { -webkit-tap-highlight-color: transparent; }
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 4px;
+}
+::-webkit-scrollbar-track {
+  background: var(--bg-primary);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--text-dim);
+  border-radius: 2px;
+}
+
+/* Gauge animation */
+@keyframes gaugeRotate {
+  from { transform: rotate(-135deg); }
+}
+
+/* Glow effects */
+.glow-green { text-shadow: 0 0 20px rgba(0, 255, 135, 0.4); }
+.glow-red { text-shadow: 0 0 20px rgba(255, 51, 102, 0.4); }
+.glow-amber { text-shadow: 0 0 20px rgba(255, 170, 0, 0.4); }
+.glow-blue { text-shadow: 0 0 20px rgba(0, 170, 255, 0.4); }
+
+/* Card hover */
+.card-hover {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  border: 1px solid transparent;
+}
+.card-hover:hover {
+  border-color: rgba(255, 255, 255, 0.06);
+  transform: translateY(-1px);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+}
+
+/* Noise texture overlay */
+.noise-bg::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Staggered animations */
+.stagger-1 { animation-delay: 0.1s; }
+.stagger-2 { animation-delay: 0.2s; }
+.stagger-3 { animation-delay: 0.3s; }
+.stagger-4 { animation-delay: 0.4s; }
+.stagger-5 { animation-delay: 0.5s; }
+
+/* Ticker editor animations */
+@keyframes editorBackdropIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes editorPanelIn {
+  from { opacity: 0; transform: translateY(-8px) scale(0.97); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes editorShake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-6px); }
+  40% { transform: translateX(5px); }
+  60% { transform: translateX(-4px); }
+  80% { transform: translateX(2px); }
+}
+
+.ticker-editor-backdrop-in {
+  animation: editorBackdropIn 0.2s ease-out forwards;
+}
+.ticker-editor-panel-in {
+  animation: editorPanelIn 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+.ticker-editor-shake {
+  animation: editorShake 0.4s ease-out;
+}

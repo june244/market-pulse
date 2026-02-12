@@ -1,0 +1,49 @@
+export interface FearGreedData {
+  score: number;
+  rating: string;
+  timestamp: string | null;
+}
+
+export interface VIXData {
+  value: number;
+  change: number;
+  changePercent: number;
+}
+
+export interface PeriodReturn {
+  price: number;
+  changePercent: number;
+}
+
+export interface PeriodReturns {
+  '1M': PeriodReturn | null;
+  '3M': PeriodReturn | null;
+  '6M': PeriodReturn | null;
+  '1Y': PeriodReturn | null;
+}
+
+export interface TickerData {
+  symbol: string;
+  name: string;
+  price: number;
+  change: number;
+  changePercent: number;
+  prevClose: number;
+  open: number;
+  dayHigh: number;
+  dayLow: number;
+  volume: number;
+  marketCap: number;
+  marketState: string;
+  periodReturns?: PeriodReturns;
+  sparkline?: number[];
+}
+
+export interface MarketData {
+  fearGreed: FearGreedData | null;
+  vix: VIXData | null;
+  tickers: TickerData[];
+  updatedAt: string;
+}
+
+export type SentimentLevel = 'extreme-fear' | 'fear' | 'neutral' | 'greed' | 'extreme-greed';

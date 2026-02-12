@@ -1,0 +1,117 @@
+import { SentimentLevel } from './types';
+
+export function getSentimentLevel(score: number): SentimentLevel {
+  if (score <= 20) return 'extreme-fear';
+  if (score <= 40) return 'fear';
+  if (score <= 60) return 'neutral';
+  if (score <= 80) return 'greed';
+  return 'extreme-greed';
+}
+
+export function getSentimentLabel(level: SentimentLevel): string {
+  const labels: Record<SentimentLevel, string> = {
+    'extreme-fear': 'Extreme Fear',
+    'fear': 'Fear',
+    'neutral': 'Neutral',
+    'greed': 'Greed',
+    'extreme-greed': 'Extreme Greed',
+  };
+  return labels[level];
+}
+
+export function getSentimentLabelKR(level: SentimentLevel): string {
+  const labels: Record<SentimentLevel, string> = {
+    'extreme-fear': '극도의 공포',
+    'fear': '공포',
+    'neutral': '중립',
+    'greed': '탐욕',
+    'extreme-greed': '극도의 탐욕',
+  };
+  return labels[level];
+}
+
+export function getSentimentColor(level: SentimentLevel): string {
+  const colors: Record<SentimentLevel, string> = {
+    'extreme-fear': '#ff3366',
+    'fear': '#ff6644',
+    'neutral': '#ffaa00',
+    'greed': '#88cc44',
+    'extreme-greed': '#00ff87',
+  };
+  return colors[level];
+}
+
+export function getVIXLevel(value: number): { label: string; labelKR: string; color: string } {
+  if (value < 12) return { label: 'Low', labelKR: '낮음', color: '#00ff87' };
+  if (value < 20) return { label: 'Normal', labelKR: '보통', color: '#ffaa00' };
+  if (value < 30) return { label: 'Elevated', labelKR: '높음', color: '#ff6644' };
+  return { label: 'Extreme', labelKR: '극단적', color: '#ff3366' };
+}
+
+export function formatNumber(num: number, decimals = 2): string {
+  return num.toLocaleString('en-US', {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  });
+}
+
+export function formatVolume(vol: number): string {
+  if (vol >= 1_000_000_000) return `${(vol / 1_000_000_000).toFixed(1)}B`;
+  if (vol >= 1_000_000) return `${(vol / 1_000_000).toFixed(1)}M`;
+  if (vol >= 1_000) return `${(vol / 1_000).toFixed(1)}K`;
+  return vol.toString();
+}
+
+export function formatMarketCap(cap: number): string {
+  if (cap >= 1_000_000_000_000) return `$${(cap / 1_000_000_000_000).toFixed(2)}T`;
+  if (cap >= 1_000_000_000) return `$${(cap / 1_000_000_000).toFixed(1)}B`;
+  if (cap >= 1_000_000) return `$${(cap / 1_000_000).toFixed(1)}M`;
+  return `$${cap.toLocaleString()}`;
+}
+
+export function formatTimestamp(iso: string): string {
+  const d = new Date(iso);
+  return d.toLocaleString('ko-KR', {
+    timeZone: 'Asia/Seoul',
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+export const DEFAULT_TICKERS = ['NVDA', 'IREN', 'MSFT', 'AAPL', 'GOOGL', 'META', 'AMZN', 'TSLA'];
+
+export function loadTickers(): string[] {
+  if (typeof window === 'undefined') return DEFAULT_TICKERS;
+  try {
+    const saved = localStorage.getItem('market-pulse-tickers');
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    }
+  } catch {}
+  return DEFAULT_TICKERS;
+}
+
+export function saveTickers(tickers: string[]): void {
+  if (typeof window === 'undefined') return;
+  localStorage.setItem('market-pulse-tickers', JSON.stringify(tickers));
+}
+
+// Cost basis (average unit price) per symbol — saved per device
+const COST_BASIS_KEY = 'market-pulse-cost-basis';
+
+export function loadCostBasis(): Record<string, number> {
+  if (typeof window === 'undefined') return {};
+  try {
+    const saved = localStorage.getItem(COST_BASIS_KEY);
+    if (saved) return JSON.parse(saved);
+  } catch {}
+  return {};
+}
+
+export function saveCostBasis(costBasis: Record<string, number>): void {
+  if (typeof window === 'undefined') return;
+  localStorage.setItem(COST_BASIS_KEY, JSON.stringify(costBasis));
+}
