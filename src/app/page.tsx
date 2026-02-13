@@ -123,6 +123,16 @@ export default function Home() {
   const maxIndex = TABS.length - 1;
 
   const onTouchStart = useCallback((e: React.TouchEvent) => {
+    // Skip tab swipe if touch starts inside a horizontally scrollable container
+    let el = e.target as HTMLElement | null;
+    while (el && el !== e.currentTarget) {
+      if (el.scrollWidth > el.clientWidth && getComputedStyle(el).overflowX !== 'hidden' && getComputedStyle(el).overflowX !== 'visible') {
+        touchStart.current = null;
+        return;
+      }
+      el = el.parentElement;
+    }
+
     const t = e.touches[0];
     touchStart.current = { x: t.clientX, y: t.clientY, time: Date.now() };
     swipeDelta.current = 0;
