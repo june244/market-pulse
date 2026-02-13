@@ -1,5 +1,6 @@
 'use client';
 
+import React from 'react';
 import { MacroItem } from '@/lib/types';
 import { formatNumber } from '@/lib/utils';
 
@@ -8,7 +9,7 @@ interface Props {
   loading: boolean;
 }
 
-export default function MacroDashboard({ macro, loading }: Props) {
+function MacroDashboard({ macro, loading }: Props) {
   if (loading) {
     return (
       <div className="flex gap-3 overflow-x-auto scrollbar-hide pb-1 mb-4 opacity-0 animate-fade-in stagger-1">
@@ -54,3 +55,5 @@ export default function MacroDashboard({ macro, loading }: Props) {
     </div>
   );
 }
+
+export default React.memo(MacroDashboard);

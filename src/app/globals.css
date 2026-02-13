@@ -2,8 +2,6 @@
 @tailwind components;
 @tailwind utilities;
 
-@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap');
-
 :root {
   --bg-primary: #0a0a0f;
   --bg-secondary: #12121a;
@@ -24,7 +22,7 @@
 }
 
 html {
-  font-family: 'IBM Plex Sans', sans-serif;
+  font-family: var(--font-ibm-plex-sans), 'IBM Plex Sans', sans-serif;
   background: var(--bg-primary);
   color: var(--text-primary);
   -webkit-font-smoothing: antialiased;

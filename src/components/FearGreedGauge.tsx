@@ -1,5 +1,6 @@
 'use client';
 
+import React from 'react';
 import { FearGreedData } from '@/lib/types';
 import { getSentimentLevel, getSentimentLabel, getSentimentLabelKR, getSentimentColor } from '@/lib/utils';
 
@@ -8,7 +9,7 @@ interface Props {
   loading: boolean;
 }
 
-export default function FearGreedGauge({ data, loading }: Props) {
+function FearGreedGauge({ data, loading }: Props) {
   if (loading || !data) {
     return (
       <div className="bg-bg-secondary rounded-2xl p-6 card-hover animate-pulse">
@@ -108,3 +109,5 @@ export default function FearGreedGauge({ data, loading }: Props) {
     </div>
   );
 }
+
+export default React.memo(FearGreedGauge);

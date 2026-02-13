@@ -1,5 +1,20 @@
 import type { Metadata, Viewport } from 'next';
+import { JetBrains_Mono, IBM_Plex_Sans } from 'next/font/google';
 import './globals.css';
+
+const jetbrainsMono = JetBrains_Mono({
+  subsets: ['latin'],
+  weight: ['300', '400', '500', '600', '700'],
+  variable: '--font-jetbrains-mono',
+  display: 'swap',
+});
+
+const ibmPlexSans = IBM_Plex_Sans({
+  subsets: ['latin'],
+  weight: ['300', '400', '500', '600'],
+  variable: '--font-ibm-plex-sans',
+  display: 'swap',
+});
 
 export const metadata: Metadata = {
   title: 'Market Pulse — 시장 심리 대시보드',
@@ -22,7 +37,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="ko">
+    <html lang="ko" className={`${jetbrainsMono.variable} ${ibmPlexSans.variable}`}>
       <body className="noise-bg">{children}</body>
     </html>
   );

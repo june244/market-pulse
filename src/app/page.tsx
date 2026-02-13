@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
+import dynamic from 'next/dynamic';
 import { MarketData } from '@/lib/types';
 import { DEFAULT_TICKERS, loadTickers, saveTickers, formatTimestamp } from '@/lib/utils';
 import FearGreedGauge from '@/components/FearGreedGauge';
@@ -10,7 +11,29 @@ import TickerTable from '@/components/TickerTable';
 import TickerEditor from '@/components/TickerEditor';
 import BottomNav from '@/components/BottomNav';
 
-type Tab = 'dashboard' | 'watchlist';
+const CoinTab = dynamic(() => import('@/components/CoinTab'), {
+  loading: () => (
+    <div className="space-y-4">
+      {[0, 1].map((i) => (
+        <div key={i} className="bg-bg-secondary rounded-2xl p-5 card-hover">
+          <div className="flex items-center justify-between mb-4">
+            <div className="animate-pulse bg-bg-tertiary rounded h-6 w-24" />
+            <div className="animate-pulse bg-bg-tertiary rounded h-6 w-32" />
+          </div>
+          <div className="animate-pulse bg-bg-tertiary rounded-xl h-[200px] mb-4" />
+          <div className="flex gap-2">
+            {[1, 2, 3, 4].map((j) => (
+              <div key={j} className="animate-pulse bg-bg-tertiary rounded-lg h-14 flex-1" />
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  ),
+});
+
+type Tab = 'dashboard' | 'coin' | 'watchlist';
+const TABS: Tab[] = ['dashboard', 'coin', 'watchlist'];
 const REFRESH_INTERVAL = 60_000; // 1 minute
 
 export default function Home() {
@@ -20,6 +43,7 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
   const [lastRefresh, setLastRefresh] = useState<string>('');
   const [activeTab, setActiveTab] = useState<Tab>('dashboard');
+  const [refreshKey, setRefreshKey] = useState(0);
 
   // Load saved tickers from localStorage on mount (overrides defaults)
   useEffect(() => {
@@ -47,7 +71,10 @@ export default function Home() {
   // Initial fetch and auto-refresh
   useEffect(() => {
     fetchData();
-    const interval = setInterval(fetchData, REFRESH_INTERVAL);
+    const interval = setInterval(() => {
+      fetchData();
+      setRefreshKey((k) => k + 1);
+    }, REFRESH_INTERVAL);
     return () => clearInterval(interval);
   }, [fetchData]);
 
@@ -91,7 +118,8 @@ export default function Home() {
   const SWIPE_THRESHOLD = 50;
   const LOCK_THRESHOLD = 10;
 
-  const tabIndex = activeTab === 'dashboard' ? 0 : 1;
+  const tabIndex = TABS.indexOf(activeTab);
+  const maxIndex = TABS.length - 1;
 
   const onTouchStart = useCallback((e: React.TouchEvent) => {
     const t = e.touches[0];
@@ -115,7 +143,9 @@ export default function Home() {
     if (directionLocked.current !== 'h') return;
 
     // Clamp: don't swipe past edges
-    const clamped = tabIndex === 0 ? Math.min(0, dx) : Math.max(0, dx);
+    let clamped = dx;
+    if (tabIndex === 0 && dx > 0) clamped = 0;
+    if (tabIndex === maxIndex && dx < 0) clamped = 0;
     swipeDelta.current = clamped;
 
     if (trackRef.current) {
@@ -123,7 +153,7 @@ export default function Home() {
       const pxToPercent = (clamped / window.innerWidth) * 100;
       trackRef.current.style.transform = `translateX(${base + pxToPercent}%)`;
     }
-  }, [tabIndex]);
+  }, [tabIndex, maxIndex]);
 
   const onTouchEnd = useCallback(() => {
     if (!touchStart.current) return;
@@ -134,23 +164,22 @@ export default function Home() {
     if (trackRef.current) trackRef.current.style.transition = 'transform 0.3s cubic-bezier(0.4,0,0.2,1)';
 
     const shouldSwitch = Math.abs(dx) > SWIPE_THRESHOLD || velocity > 0.4;
+    let newIdx = tabIndex;
     if (shouldSwitch && directionLocked.current === 'h') {
-      if (dx < 0 && activeTab === 'dashboard') setActiveTab('watchlist');
-      else if (dx > 0 && activeTab === 'watchlist') setActiveTab('dashboard');
+      if (dx < 0 && tabIndex < maxIndex) newIdx = tabIndex + 1;
+      else if (dx > 0 && tabIndex > 0) newIdx = tabIndex - 1;
     }
 
-    // Snap back
+    setActiveTab(TABS[newIdx]);
+
     if (trackRef.current) {
-      const newIdx = (shouldSwitch && directionLocked.current === 'h')
-        ? (dx < 0 && activeTab === 'dashboard' ? 1 : dx > 0 && activeTab === 'watchlist' ? 0 : tabIndex)
-        : tabIndex;
       trackRef.current.style.transform = `translateX(${-newIdx * 100}%)`;
     }
 
     touchStart.current = null;
     swipeDelta.current = 0;
     directionLocked.current = null;
-  }, [activeTab, tabIndex]);
+  }, [tabIndex, maxIndex]);
 
   // Sync track position when tab changes via bottom nav
   useEffect(() => {
@@ -184,7 +213,7 @@ export default function Home() {
             </span>
           )}
           <button
-            onClick={() => { setLoading(true); fetchData(); }}
+            onClick={() => { setLoading(true); fetchData(); setRefreshKey((k) => k + 1); }}
             className="p-2 rounded-lg bg-bg-tertiary hover:bg-bg-tertiary/80 transition-colors text-text-secondary"
             title="새로고침"
           >
@@ -224,7 +253,11 @@ export default function Home() {
             </div>
             <MacroDashboard macro={data?.macro ?? []} loading={loading} />
           </div>
-          {/* Tab 1: Watchlist */}
+          {/* Tab 1: Coin */}
+          <div className="w-full flex-shrink-0 px-4">
+            <CoinTab refreshKey={refreshKey} />
+          </div>
+          {/* Tab 2: Watchlist */}
           <div className="w-full flex-shrink-0 px-4">
             <TickerTable tickers={data?.tickers ?? []} loading={loading} tickerOrder={tickers} onReorder={handleTickerUpdate} onDelete={handleDeleteTicker} />
           </div>
@@ -238,7 +271,10 @@ export default function Home() {
           <VIXCard data={data?.vix ?? null} loading={loading} />
         </div>
         <MacroDashboard macro={data?.macro ?? []} loading={loading} />
-        <TickerTable tickers={data?.tickers ?? []} loading={loading} tickerOrder={tickers} onReorder={handleTickerUpdate} onDelete={handleDeleteTicker} />
+        <CoinTab refreshKey={refreshKey} />
+        <div className="mt-4">
+          <TickerTable tickers={data?.tickers ?? []} loading={loading} tickerOrder={tickers} onReorder={handleTickerUpdate} onDelete={handleDeleteTicker} />
+        </div>
       </div>
 
       {/* Footer */}

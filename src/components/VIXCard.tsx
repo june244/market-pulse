@@ -1,5 +1,6 @@
 'use client';
 
+import React from 'react';
 import { VIXData } from '@/lib/types';
 import { getVIXLevel, formatNumber } from '@/lib/utils';
 
@@ -8,7 +9,7 @@ interface Props {
   loading: boolean;
 }
 
-export default function VIXCard({ data, loading }: Props) {
+function VIXCard({ data, loading }: Props) {
   if (loading || !data) {
     return (
       <div className="bg-bg-secondary rounded-2xl p-6 card-hover animate-pulse">
@@ -95,3 +96,5 @@ export default function VIXCard({ data, loading }: Props) {
     </div>
   );
 }
+
+export default React.memo(VIXCard);

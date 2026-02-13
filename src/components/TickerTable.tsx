@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { TickerData } from '@/lib/types';
 import { formatNumber, formatVolume, formatMarketCap, loadCostBasis, saveCostBasis } from '@/lib/utils';
 
@@ -96,7 +96,7 @@ interface Props {
   onDelete?: (symbol: string) => void;
 }
 
-export default function TickerTable({ tickers, loading, tickerOrder, onReorder, onDelete }: Props) {
+function TickerTable({ tickers, loading, tickerOrder, onReorder, onDelete }: Props) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [costBasis, setCostBasis] = useState<Record<string, number>>({});
   const [editingCost, setEditingCost] = useState<Record<string, string>>({});
@@ -118,13 +118,13 @@ export default function TickerTable({ tickers, loading, tickerOrder, onReorder, 
   }, []);
 
   // Sort tickers based on tickerOrder
-  const sortedTickers = tickerOrder
+  const sortedTickers = useMemo(() => tickerOrder
     ? [...tickers].sort((a, b) => {
         const ai = tickerOrder.indexOf(a.symbol);
         const bi = tickerOrder.indexOf(b.symbol);
         return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi);
       })
-    : tickers;
+    : tickers, [tickers, tickerOrder]);
 
   const toggle = (symbol: string) => {
     if (dragSymbol) return;
@@ -605,3 +605,5 @@ export default function TickerTable({ tickers, loading, tickerOrder, onReorder, 
     </div>
   );
 }
+
+export default React.memo(TickerTable);
