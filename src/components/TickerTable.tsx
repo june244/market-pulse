@@ -96,11 +96,29 @@ interface Props {
   onDelete?: (symbol: string) => void;
 }
 
+const CONFETTI_COLORS = ['#00ff87', '#ffd700', '#00aaff', '#ff3366', '#ffaa00'];
+
+function spawnConfetti(container: HTMLElement) {
+  for (let i = 0; i < 20; i++) {
+    const span = document.createElement('span');
+    span.className = 'confetti-particle';
+    span.style.left = `${Math.random() * 100}%`;
+    span.style.top = `${Math.random() * 20 - 10}px`;
+    span.style.backgroundColor = CONFETTI_COLORS[Math.floor(Math.random() * CONFETTI_COLORS.length)];
+    span.style.animationDelay = `${Math.random() * 0.5}s`;
+    span.style.width = `${4 + Math.random() * 4}px`;
+    span.style.height = `${4 + Math.random() * 4}px`;
+    container.appendChild(span);
+    setTimeout(() => span.remove(), 2500);
+  }
+}
+
 function TickerTable({ tickers, loading, tickerOrder, onReorder, onDelete }: Props) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [costBasis, setCostBasis] = useState<Record<string, number>>({});
   const [editingCost, setEditingCost] = useState<Record<string, string>>({});
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+  const celebratedRef = useRef<Set<string>>(new Set());
 
   // Drag state
   const [dragSymbol, setDragSymbol] = useState<string | null>(null);
@@ -358,7 +376,17 @@ function TickerTable({ tickers, loading, tickerOrder, onReorder, onDelete }: Pro
           return (
             <div
               key={t.symbol}
-              ref={(el) => { if (el) rowRefs.current.set(t.symbol, el); else rowRefs.current.delete(t.symbol); }}
+              ref={(el) => {
+                if (el) {
+                  rowRefs.current.set(t.symbol, el);
+                  if (t.changePercent > 5 && !celebratedRef.current.has(t.symbol)) {
+                    celebratedRef.current.add(t.symbol);
+                    requestAnimationFrame(() => spawnConfetti(el));
+                  }
+                } else {
+                  rowRefs.current.delete(t.symbol);
+                }
+              }}
               className={`rounded-xl transition-all duration-150 opacity-0 animate-slide-up overflow-hidden ${
                 isOpen ? 'bg-bg-tertiary/40' : ''
               } ${isDragging ? 'opacity-50 scale-[0.97]' : ''} ${

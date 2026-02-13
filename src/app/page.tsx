@@ -3,13 +3,14 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import dynamic from 'next/dynamic';
 import { MarketData } from '@/lib/types';
-import { DEFAULT_TICKERS, loadTickers, saveTickers, formatTimestamp } from '@/lib/utils';
+import { DEFAULT_TICKERS, loadTickers, saveTickers, formatTimestamp, loadTheme, saveTheme, Theme } from '@/lib/utils';
 import FearGreedGauge from '@/components/FearGreedGauge';
 import VIXCard from '@/components/VIXCard';
 import MacroDashboard from '@/components/MacroDashboard';
 import TickerTable from '@/components/TickerTable';
 import TickerEditor from '@/components/TickerEditor';
 import BottomNav from '@/components/BottomNav';
+import ThemePicker from '@/components/ThemePicker';
 
 const CoinTab = dynamic(() => import('@/components/CoinTab'), {
   ssr: false,
@@ -45,10 +46,17 @@ export default function Home() {
   const [lastRefresh, setLastRefresh] = useState<string>('');
   const [activeTab, setActiveTab] = useState<Tab>('dashboard');
   const [refreshKey, setRefreshKey] = useState(0);
+  const [theme, setTheme] = useState<Theme>('dark');
+  const [shakeToast, setShakeToast] = useState(false);
 
-  // Load saved tickers from localStorage on mount (overrides defaults)
+  // Load saved tickers + theme from localStorage on mount
   useEffect(() => {
     setTickers(loadTickers());
+    const savedTheme = loadTheme();
+    setTheme(savedTheme);
+    if (savedTheme !== 'dark') {
+      document.documentElement.dataset.theme = savedTheme;
+    }
   }, []);
 
   const fetchData = useCallback(async () => {
@@ -101,6 +109,16 @@ export default function Home() {
     }
   }, []);
 
+  const handleThemeChange = (newTheme: Theme) => {
+    setTheme(newTheme);
+    saveTheme(newTheme);
+    if (newTheme === 'dark') {
+      delete document.documentElement.dataset.theme;
+    } else {
+      document.documentElement.dataset.theme = newTheme;
+    }
+  };
+
   const handleTickerUpdate = (newTickers: string[]) => {
     setTickers(newTickers);
     saveTickers(newTickers);
@@ -110,6 +128,47 @@ export default function Home() {
     const newTickers = tickers.filter((t) => t !== symbol);
     handleTickerUpdate(newTickers);
   };
+
+  // ── Shake to refresh (mobile) ──
+  useEffect(() => {
+    let lastShake = 0;
+    const SHAKE_THRESHOLD = 20;
+    const DEBOUNCE = 3000;
+
+    const handleMotion = (e: DeviceMotionEvent) => {
+      const acc = e.accelerationIncludingGravity;
+      if (!acc || acc.x == null || acc.y == null || acc.z == null) return;
+      const magnitude = Math.sqrt(acc.x * acc.x + acc.y * acc.y + acc.z * acc.z);
+      const now = Date.now();
+      if (magnitude > SHAKE_THRESHOLD && now - lastShake > DEBOUNCE) {
+        lastShake = now;
+        setLoading(true);
+        fetchData();
+        setRefreshKey((k) => k + 1);
+        setShakeToast(true);
+        setTimeout(() => setShakeToast(false), 1000);
+      }
+    };
+
+    // iOS 13+ permission
+    const dmEvent = DeviceMotionEvent as any;
+    if (typeof dmEvent.requestPermission === 'function') {
+      const requestOnGesture = () => {
+        dmEvent.requestPermission().then((state: string) => {
+          if (state === 'granted') window.addEventListener('devicemotion', handleMotion);
+        }).catch(() => {});
+        window.removeEventListener('touchstart', requestOnGesture, true);
+      };
+      window.addEventListener('touchstart', requestOnGesture, true);
+      return () => {
+        window.removeEventListener('touchstart', requestOnGesture, true);
+        window.removeEventListener('devicemotion', handleMotion);
+      };
+    } else {
+      window.addEventListener('devicemotion', handleMotion);
+      return () => window.removeEventListener('devicemotion', handleMotion);
+    }
+  }, [fetchData]);
 
   // ── Swipe-to-switch tab (mobile only) ──
   const touchStart = useRef<{ x: number; y: number; time: number } | null>(null);
@@ -203,7 +262,7 @@ export default function Home() {
   return (
     <main className="relative z-10 min-h-screen px-4 py-6 pb-20 md:pb-6 max-w-5xl mx-auto">
       {/* Header */}
-      <header className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-8 opacity-0 animate-fade-in">
+      <header className="relative z-[100] flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-8 opacity-0 animate-fade-in">
         <div>
           <h1 className="font-display text-2xl font-bold tracking-tight text-text-primary flex items-center gap-2">
             <span
@@ -233,9 +292,20 @@ export default function Home() {
               <path d="M21 3v5h-5" />
             </svg>
           </button>
+          <ThemePicker current={theme} onChange={handleThemeChange} />
           <TickerEditor tickers={tickers} onUpdate={handleTickerUpdate} />
         </div>
       </header>
+
+      {/* Shake-to-refresh toast */}
+      {shakeToast && (
+        <div
+          className="fixed bottom-24 left-1/2 z-50 px-4 py-2 rounded-full bg-bg-secondary border border-bg-tertiary text-text-primary text-sm font-display shadow-lg"
+          style={{ animation: 'toastIn 0.2s ease-out' }}
+        >
+          새로고침 중...
+        </div>
+      )}
 
       {/* Error banner */}
       {error && (

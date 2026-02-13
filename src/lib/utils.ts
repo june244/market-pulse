@@ -115,3 +115,21 @@ export function saveCostBasis(costBasis: Record<string, number>): void {
   if (typeof window === 'undefined') return;
   localStorage.setItem(COST_BASIS_KEY, JSON.stringify(costBasis));
 }
+
+// Theme persistence
+const THEME_KEY = 'market-pulse-theme';
+export type Theme = 'dark' | 'light' | 'oled' | 'bloomberg';
+
+export function loadTheme(): Theme {
+  if (typeof window === 'undefined') return 'dark';
+  try {
+    const saved = localStorage.getItem(THEME_KEY);
+    if (saved && ['dark', 'light', 'oled', 'bloomberg'].includes(saved)) return saved as Theme;
+  } catch {}
+  return 'dark';
+}
+
+export function saveTheme(theme: Theme): void {
+  if (typeof window === 'undefined') return;
+  localStorage.setItem(THEME_KEY, theme);
+}

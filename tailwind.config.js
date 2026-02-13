@@ -8,9 +8,9 @@ module.exports = {
         body: ['IBM Plex Sans', 'sans-serif'],
       },
       colors: {
-        bg: { primary: '#0a0a0f', secondary: '#12121a', tertiary: '#1a1a28' },
+        bg: { primary: 'var(--bg-primary)', secondary: 'var(--bg-secondary)', tertiary: 'var(--bg-tertiary)' },
         accent: { green: '#00ff87', red: '#ff3366', amber: '#ffaa00', blue: '#00aaff', muted: '#555570' },
-        text: { primary: '#e8e8f0', secondary: '#8888a0', dim: '#555570' },
+        text: { primary: 'var(--text-primary)', secondary: 'var(--text-secondary)', dim: 'var(--text-dim)' },
       },
       animation: {
         'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
