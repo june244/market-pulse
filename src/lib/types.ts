@@ -39,9 +39,18 @@ export interface TickerData {
   sparkline?: number[];
 }
 
+export interface MacroItem {
+  symbol: string;
+  label: string;
+  price: number;
+  change: number;
+  changePercent: number;
+}
+
 export interface MarketData {
   fearGreed: FearGreedData | null;
   vix: VIXData | null;
+  macro: MacroItem[];
   tickers: TickerData[];
   updatedAt: string;
 }

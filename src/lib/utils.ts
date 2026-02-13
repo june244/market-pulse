@@ -80,7 +80,7 @@ export function formatTimestamp(iso: string): string {
   });
 }
 
-export const DEFAULT_TICKERS = ['NVDA', 'IREN', 'MSFT', 'AAPL', 'GOOGL', 'META', 'AMZN', 'TSLA'];
+export const DEFAULT_TICKERS: string[] = [];
 
 export function loadTickers(): string[] {
   if (typeof window === 'undefined') return DEFAULT_TICKERS;

@@ -1,5 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { PeriodReturns } from '@/lib/types';
+import { PeriodReturns, MacroItem } from '@/lib/types';
+
+const MACRO_SYMBOLS: Record<string, string> = {
+  '^TNX': '10Y Yield',
+  'DX-Y.NYB': 'Dollar',
+  'GC=F': 'Gold',
+  'CL=F': 'Oil',
+  'BTC-USD': 'BTC',
+  'ETH-USD': 'ETH',
+};
 
 const YAHOO_UA =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
@@ -213,8 +222,14 @@ export async function GET(request: NextRequest) {
     .map((t) => t.trim().toUpperCase())
     .filter(Boolean);
 
-  // Always include VIX in the Yahoo query
-  const allSymbols = ['^VIX', ...userTickers.filter((t) => t !== '^VIX')];
+  // Batch VIX + macro + user tickers into one API call
+  const macroSymbols = Object.keys(MACRO_SYMBOLS);
+  const macroSet = new Set(macroSymbols);
+  const allSymbols = [
+    '^VIX',
+    ...macroSymbols,
+    ...userTickers.filter((t) => t !== '^VIX' && !macroSet.has(t)),
+  ];
 
   const [fearGreed, quotes, historical] = await Promise.all([
     fetchFearGreed(),
@@ -222,8 +237,26 @@ export async function GET(request: NextRequest) {
     userTickers.length > 0 ? fetchHistoricalData(userTickers) : Promise.resolve({} as Record<string, HistoricalData>),
   ]);
 
+  // Partition quotes into VIX / macro / user tickers
   const vixQuote = quotes.find((q: any) => q.symbol === '^VIX');
-  const tickerQuotes = quotes.filter((q: any) => q.symbol !== '^VIX');
+
+  const macro: MacroItem[] = macroSymbols
+    .map((sym) => {
+      const q = quotes.find((qt: any) => qt.symbol === sym);
+      if (!q) return null;
+      return {
+        symbol: sym,
+        label: MACRO_SYMBOLS[sym],
+        price: q.price,
+        change: q.change,
+        changePercent: q.changePercent,
+      };
+    })
+    .filter((m): m is MacroItem => m !== null);
+
+  const tickerQuotes = quotes.filter(
+    (q: any) => q.symbol !== '^VIX' && !macroSet.has(q.symbol)
+  );
 
   // Merge historical data into ticker data
   const tickersWithReturns = tickerQuotes.map((t: any) => {
@@ -244,6 +277,7 @@ export async function GET(request: NextRequest) {
           changePercent: vixQuote.changePercent,
         }
       : null,
+    macro,
     tickers: tickersWithReturns,
     updatedAt: new Date().toISOString(),
   });

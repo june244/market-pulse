@@ -130,3 +130,12 @@ body {
 .ticker-editor-shake {
   animation: editorShake 0.4s ease-out;
 }
+
+/* Hide scrollbar for horizontal scroll rows */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}

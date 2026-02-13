@@ -5,6 +5,8 @@ import { TickerData } from '@/lib/types';
 import { formatNumber, formatVolume, formatMarketCap, loadCostBasis, saveCostBasis } from '@/lib/utils';
 
 const PERIOD_KEYS = ['1M', '3M', '6M', '1Y'] as const;
+const SWIPE_THRESHOLD = 80;
+const SWIPE_LOCK_THRESHOLD = 10;
 
 // --- Sparkline SVG ---
 function Sparkline({ data, width = 80, height = 28 }: { data: number[]; width?: number; height?: number }) {
@@ -78,23 +80,38 @@ function GripIcon() {
   );
 }
 
+interface SwipeState {
+  startX: number;
+  startY: number;
+  deltaX: number;
+  locked: 'horizontal' | 'vertical' | null;
+  active: boolean;
+}
+
 interface Props {
   tickers: TickerData[];
   loading: boolean;
   tickerOrder?: string[];
   onReorder?: (symbols: string[]) => void;
+  onDelete?: (symbol: string) => void;
 }
 
-export default function TickerTable({ tickers, loading, tickerOrder, onReorder }: Props) {
+export default function TickerTable({ tickers, loading, tickerOrder, onReorder, onDelete }: Props) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [costBasis, setCostBasis] = useState<Record<string, number>>({});
   const [editingCost, setEditingCost] = useState<Record<string, string>>({});
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
 
   // Drag state
   const [dragSymbol, setDragSymbol] = useState<string | null>(null);
   const [overSymbol, setOverSymbol] = useState<string | null>(null);
   const rowRefs = useRef<Map<string, HTMLDivElement>>(new Map());
   const dragPointerId = useRef<number | null>(null);
+
+  // Swipe state per row
+  const swipeState = useRef<Map<string, SwipeState>>(new Map());
+  const [swipeDeltas, setSwipeDeltas] = useState<Record<string, number>>({});
+  const swipeDidAction = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     setCostBasis(loadCostBasis());
@@ -110,7 +127,11 @@ export default function TickerTable({ tickers, loading, tickerOrder, onReorder }
     : tickers;
 
   const toggle = (symbol: string) => {
-    if (dragSymbol) return; // don't toggle during drag
+    if (dragSymbol) return;
+    if (swipeDidAction.current.has(symbol)) {
+      swipeDidAction.current.delete(symbol);
+      return;
+    }
     setExpanded((prev) => {
       const next = new Set(prev);
       if (next.has(symbol)) next.delete(symbol);
@@ -132,7 +153,6 @@ export default function TickerTable({ tickers, loading, tickerOrder, onReorder }
   const handlePointerMove = useCallback((e: React.PointerEvent) => {
     if (!dragSymbol || e.pointerId !== dragPointerId.current) return;
 
-    // Find which row the pointer is over
     const y = e.clientY;
     let closest: string | null = null;
     let closestDist = Infinity;
@@ -168,6 +188,85 @@ export default function TickerTable({ tickers, loading, tickerOrder, onReorder }
     setOverSymbol(null);
     dragPointerId.current = null;
   }, [dragSymbol, overSymbol, onReorder, tickerOrder]);
+
+  // --- Swipe handlers ---
+  const handleSwipePointerDown = useCallback((symbol: string, e: React.PointerEvent) => {
+    if (dragSymbol) return;
+    swipeState.current.set(symbol, {
+      startX: e.clientX,
+      startY: e.clientY,
+      deltaX: 0,
+      locked: null,
+      active: true,
+    });
+  }, [dragSymbol]);
+
+  const handleSwipePointerMove = useCallback((symbol: string, e: React.PointerEvent) => {
+    const state = swipeState.current.get(symbol);
+    if (!state || !state.active) return;
+
+    const dx = e.clientX - state.startX;
+    const dy = e.clientY - state.startY;
+
+    if (!state.locked) {
+      if (Math.abs(dx) > SWIPE_LOCK_THRESHOLD) {
+        state.locked = 'horizontal';
+      } else if (Math.abs(dy) > SWIPE_LOCK_THRESHOLD) {
+        state.locked = 'vertical';
+        state.active = false;
+        return;
+      } else {
+        return;
+      }
+    }
+
+    if (state.locked !== 'horizontal') return;
+
+    e.preventDefault();
+    state.deltaX = dx;
+    setSwipeDeltas((prev) => ({ ...prev, [symbol]: dx }));
+  }, []);
+
+  const handleSwipePointerUp = useCallback((symbol: string) => {
+    const state = swipeState.current.get(symbol);
+    if (!state || !state.active) {
+      swipeState.current.delete(symbol);
+      return;
+    }
+
+    const dx = state.deltaX;
+
+    if (state.locked === 'horizontal' && Math.abs(dx) > SWIPE_LOCK_THRESHOLD) {
+      swipeDidAction.current.add(symbol);
+    }
+
+    if (dx > SWIPE_THRESHOLD && onReorder && tickerOrder) {
+      // Swipe right → pin to top
+      const order = [...tickerOrder];
+      const idx = order.indexOf(symbol);
+      if (idx > 0) {
+        order.splice(idx, 1);
+        order.unshift(symbol);
+        onReorder(order);
+      }
+    } else if (dx < -SWIPE_THRESHOLD) {
+      // Swipe left → show delete confirmation
+      setConfirmDelete(symbol);
+    }
+
+    // Snap back
+    swipeState.current.delete(symbol);
+    setSwipeDeltas((prev) => ({ ...prev, [symbol]: 0 }));
+  }, [onReorder, tickerOrder]);
+
+  const handleConfirmDelete = useCallback((symbol: string) => {
+    setConfirmDelete(null);
+    onDelete?.(symbol);
+  }, [onDelete]);
+
+  const handleCancelDelete = useCallback(() => {
+    setConfirmDelete(null);
+  }, []);
 
   // --- Cost basis handlers ---
   const handleCostChange = (symbol: string, value: string) => {
@@ -253,190 +352,252 @@ export default function TickerTable({ tickers, loading, tickerOrder, onReorder }
           const plUp = plPercent !== null && plPercent >= 0;
           const isDragging = dragSymbol === t.symbol;
           const isDropTarget = dragSymbol && overSymbol === t.symbol && overSymbol !== dragSymbol;
+          const swipeDx = swipeDeltas[t.symbol] || 0;
+          const showDeleteConfirm = confirmDelete === t.symbol;
 
           return (
             <div
               key={t.symbol}
               ref={(el) => { if (el) rowRefs.current.set(t.symbol, el); else rowRefs.current.delete(t.symbol); }}
-              className={`rounded-xl transition-all duration-150 opacity-0 animate-slide-up ${
+              className={`rounded-xl transition-all duration-150 opacity-0 animate-slide-up overflow-hidden ${
                 isOpen ? 'bg-bg-tertiary/40' : ''
               } ${isDragging ? 'opacity-50 scale-[0.97]' : ''} ${
                 isDropTarget ? 'ring-1 ring-accent-blue/40 bg-accent-blue/[0.03]' : ''
               }`}
               style={{ animationDelay: `${0.3 + i * 0.05}s` }}
             >
-              {/* Collapsed row */}
-              <div className="flex items-center">
-                {/* Drag handle */}
-                <div
-                  className="shrink-0 px-1 py-4 cursor-grab active:cursor-grabbing touch-none select-none"
-                  onPointerDown={(e) => handleDragStart(t.symbol, e)}
-                >
-                  <GripIcon />
+              {/* Delete confirmation overlay */}
+              {showDeleteConfirm && (
+                <div className="flex items-center justify-center gap-4 py-4 px-4 bg-accent-red/10">
+                  <span className="text-sm font-display font-medium text-accent-red">삭제?</span>
+                  <button
+                    type="button"
+                    onClick={() => handleConfirmDelete(t.symbol)}
+                    className="px-4 py-1.5 rounded-lg bg-accent-red text-white text-xs font-display font-semibold transition-colors hover:bg-accent-red/80"
+                  >
+                    삭제
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleCancelDelete}
+                    className="px-4 py-1.5 rounded-lg bg-bg-tertiary text-text-secondary text-xs font-display font-semibold transition-colors hover:bg-bg-tertiary/80"
+                  >
+                    취소
+                  </button>
                 </div>
+              )}
 
-                <button
-                  type="button"
-                  onClick={() => toggle(t.symbol)}
-                  className={`flex-1 flex items-center gap-3 pr-3 py-3 rounded-r-xl transition-colors ${
-                    isOpen ? '' : 'hover:bg-bg-tertiary/30'
-                  }`}
-                >
-                  {/* Symbol + Name */}
-                  <div className="flex flex-col items-start min-w-[72px]">
-                    <span className="font-display font-bold text-sm text-text-primary leading-tight">
-                      {t.symbol}
-                    </span>
-                    <span className="text-[11px] text-text-secondary truncate max-w-[80px] leading-tight mt-0.5">
-                      {t.name}
-                    </span>
+              {/* Swipe container with action indicators behind */}
+              {!showDeleteConfirm && (
+                <div className="relative">
+                  {/* Left action indicator (swipe right → pin) */}
+                  <div
+                    className="absolute inset-y-0 left-0 flex items-center pl-4 pointer-events-none transition-opacity"
+                    style={{ opacity: swipeDx > SWIPE_LOCK_THRESHOLD ? Math.min(1, swipeDx / SWIPE_THRESHOLD) : 0 }}
+                  >
+                    <span className="text-xs font-display font-semibold text-accent-blue">Pin Top</span>
                   </div>
 
-                  {/* Sparkline */}
-                  <div className="hidden sm:block shrink-0">
-                    {t.sparkline && t.sparkline.length >= 2 ? (
-                      <Sparkline data={t.sparkline} />
-                    ) : (
-                      <div className="w-[80px] h-[28px] bg-bg-tertiary/30 rounded" />
-                    )}
+                  {/* Right action indicator (swipe left → delete) */}
+                  <div
+                    className="absolute inset-y-0 right-0 flex items-center pr-4 pointer-events-none transition-opacity"
+                    style={{ opacity: swipeDx < -SWIPE_LOCK_THRESHOLD ? Math.min(1, Math.abs(swipeDx) / SWIPE_THRESHOLD) : 0 }}
+                  >
+                    <span className="text-xs font-display font-semibold text-accent-red">삭제</span>
                   </div>
 
-                  <div className="flex-1" />
+                  {/* Swipeable row content */}
+                  <div
+                    className="relative touch-pan-y"
+                    style={{
+                      transform: swipeDx ? `translateX(${swipeDx}px)` : undefined,
+                      transition: swipeDx ? 'none' : 'transform 0.2s ease-out',
+                      backgroundColor: swipeDx > SWIPE_LOCK_THRESHOLD
+                        ? `rgba(0, 170, 255, ${Math.min(0.06, (swipeDx / SWIPE_THRESHOLD) * 0.06)})`
+                        : swipeDx < -SWIPE_LOCK_THRESHOLD
+                        ? `rgba(255, 51, 102, ${Math.min(0.06, (Math.abs(swipeDx) / SWIPE_THRESHOLD) * 0.06)})`
+                        : undefined,
+                    }}
+                    onPointerDown={(e) => handleSwipePointerDown(t.symbol, e)}
+                    onPointerMove={(e) => handleSwipePointerMove(t.symbol, e)}
+                    onPointerUp={() => handleSwipePointerUp(t.symbol)}
+                    onPointerCancel={() => handleSwipePointerUp(t.symbol)}
+                  >
+                    {/* Collapsed row */}
+                    <div className="flex items-center">
+                      {/* Drag handle */}
+                      <div
+                        className="shrink-0 px-1 py-4 cursor-grab active:cursor-grabbing touch-none select-none"
+                        onPointerDown={(e) => { e.stopPropagation(); handleDragStart(t.symbol, e); }}
+                      >
+                        <GripIcon />
+                      </div>
 
-                  {/* Right: Price + Badges */}
-                  <div className="flex items-center gap-2 shrink-0">
-                    {plPercent !== null && (
-                      <span
-                        className={`hidden sm:inline-block px-1.5 py-0.5 rounded text-[11px] font-display font-semibold ${
-                          plUp ? 'bg-accent-blue/10 text-accent-blue' : 'bg-accent-red/10 text-accent-red'
+                      <button
+                        type="button"
+                        onClick={() => toggle(t.symbol)}
+                        className={`flex-1 flex items-center gap-3 pr-3 py-3 rounded-r-xl transition-colors ${
+                          isOpen ? '' : 'hover:bg-bg-tertiary/30'
                         }`}
                       >
-                        P/L {plUp ? '+' : ''}{formatNumber(plPercent)}%
-                      </span>
-                    )}
-                    <div className="flex flex-col items-end">
-                      <span className="font-display font-semibold text-sm text-text-primary leading-tight">
-                        ${formatNumber(t.price)}
-                      </span>
-                      <span
-                        className={`text-[11px] font-display font-semibold leading-tight mt-0.5 ${
-                          isUp ? 'text-accent-green' : 'text-accent-red'
-                        }`}
-                      >
-                        {isUp ? '+' : ''}{formatNumber(t.change)} ({isUp ? '+' : ''}{formatNumber(t.changePercent)}%)
-                      </span>
+                        {/* Symbol + Name */}
+                        <div className="flex flex-col items-start min-w-[72px]">
+                          <span className="font-display font-bold text-sm text-text-primary leading-tight">
+                            {t.symbol}
+                          </span>
+                          <span className="text-[11px] text-text-secondary truncate max-w-[80px] leading-tight mt-0.5">
+                            {t.name}
+                          </span>
+                        </div>
+
+                        {/* Sparkline */}
+                        <div className="hidden sm:block shrink-0">
+                          {t.sparkline && t.sparkline.length >= 2 ? (
+                            <Sparkline data={t.sparkline} />
+                          ) : (
+                            <div className="w-[80px] h-[28px] bg-bg-tertiary/30 rounded" />
+                          )}
+                        </div>
+
+                        <div className="flex-1" />
+
+                        {/* Right: Price + Badges */}
+                        <div className="flex items-center gap-2 shrink-0">
+                          {plPercent !== null && (
+                            <span
+                              className={`hidden sm:inline-block px-1.5 py-0.5 rounded text-[11px] font-display font-semibold ${
+                                plUp ? 'bg-accent-blue/10 text-accent-blue' : 'bg-accent-red/10 text-accent-red'
+                              }`}
+                            >
+                              P/L {plUp ? '+' : ''}{formatNumber(plPercent)}%
+                            </span>
+                          )}
+                          <div className="flex flex-col items-end">
+                            <span className="font-display font-semibold text-sm text-text-primary leading-tight">
+                              ${formatNumber(t.price)}
+                            </span>
+                            <span
+                              className={`text-[11px] font-display font-semibold leading-tight mt-0.5 ${
+                                isUp ? 'text-accent-green' : 'text-accent-red'
+                              }`}
+                            >
+                              {isUp ? '+' : ''}{formatNumber(t.change)} ({isUp ? '+' : ''}{formatNumber(t.changePercent)}%)
+                            </span>
+                          </div>
+                          <svg
+                            className={`w-3.5 h-3.5 text-text-dim transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            stroke="currentColor"
+                            strokeWidth={2.5}
+                          >
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                          </svg>
+                        </div>
+                      </button>
                     </div>
-                    <svg
-                      className={`w-3.5 h-3.5 text-text-dim transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                      strokeWidth={2.5}
+
+                    {/* Expanded detail panel */}
+                    <div
+                      className={`overflow-hidden transition-all duration-200 ease-out ${
+                        isOpen ? 'max-h-[500px] opacity-100' : 'max-h-0 opacity-0'
+                      }`}
                     >
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-                    </svg>
-                  </div>
-                </button>
-              </div>
+                      <div className="px-3 pb-4 pt-1 space-y-3">
+                        {/* Day Range Bar */}
+                        <div>
+                          <span className="text-[11px] text-text-dim font-display mb-1.5 block">일일 가격 범위</span>
+                          <DayRangeBar low={t.dayLow} high={t.dayHigh} current={t.price} />
+                        </div>
 
-              {/* Expanded detail panel */}
-              <div
-                className={`overflow-hidden transition-all duration-200 ease-out ${
-                  isOpen ? 'max-h-[500px] opacity-100' : 'max-h-0 opacity-0'
-                }`}
-              >
-                <div className="px-3 pb-4 pt-1 space-y-3">
-                  {/* Day Range Bar */}
-                  <div>
-                    <span className="text-[11px] text-text-dim font-display mb-1.5 block">일일 가격 범위</span>
-                    <DayRangeBar low={t.dayLow} high={t.dayHigh} current={t.price} />
-                  </div>
+                        {/* Stats grid */}
+                        <div className="grid grid-cols-3 sm:grid-cols-5 gap-3">
+                          <div>
+                            <span className="text-[11px] text-text-dim font-display block mb-0.5">등락</span>
+                            <span className={`text-sm font-display font-semibold ${isUp ? 'text-accent-green' : 'text-accent-red'}`}>
+                              {isUp ? '+' : ''}${formatNumber(t.change)}
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-[11px] text-text-dim font-display block mb-0.5">시가</span>
+                            <span className="text-sm font-display font-medium text-text-primary">${formatNumber(t.open)}</span>
+                          </div>
+                          <div>
+                            <span className="text-[11px] text-text-dim font-display block mb-0.5">전일 종가</span>
+                            <span className="text-sm font-display font-medium text-text-primary">${formatNumber(t.prevClose)}</span>
+                          </div>
+                          <div>
+                            <span className="text-[11px] text-text-dim font-display block mb-0.5">거래량</span>
+                            <span className="text-sm font-display font-medium text-text-secondary">{formatVolume(t.volume)}</span>
+                          </div>
+                          <div>
+                            <span className="text-[11px] text-text-dim font-display block mb-0.5">시가총액</span>
+                            <span className="text-sm font-display font-medium text-text-primary">{formatMarketCap(t.marketCap)}</span>
+                          </div>
+                        </div>
 
-                  {/* Stats grid */}
-                  <div className="grid grid-cols-3 sm:grid-cols-5 gap-3">
-                    <div>
-                      <span className="text-[11px] text-text-dim font-display block mb-0.5">등락</span>
-                      <span className={`text-sm font-display font-semibold ${isUp ? 'text-accent-green' : 'text-accent-red'}`}>
-                        {isUp ? '+' : ''}${formatNumber(t.change)}
-                      </span>
-                    </div>
-                    <div>
-                      <span className="text-[11px] text-text-dim font-display block mb-0.5">시가</span>
-                      <span className="text-sm font-display font-medium text-text-primary">${formatNumber(t.open)}</span>
-                    </div>
-                    <div>
-                      <span className="text-[11px] text-text-dim font-display block mb-0.5">전일 종가</span>
-                      <span className="text-sm font-display font-medium text-text-primary">${formatNumber(t.prevClose)}</span>
-                    </div>
-                    <div>
-                      <span className="text-[11px] text-text-dim font-display block mb-0.5">거래량</span>
-                      <span className="text-sm font-display font-medium text-text-secondary">{formatVolume(t.volume)}</span>
-                    </div>
-                    <div>
-                      <span className="text-[11px] text-text-dim font-display block mb-0.5">시가총액</span>
-                      <span className="text-sm font-display font-medium text-text-primary">{formatMarketCap(t.marketCap)}</span>
-                    </div>
-                  </div>
-
-                  {/* Period returns */}
-                  {t.periodReturns && (
-                    <div className="pt-3 border-t border-bg-tertiary/50">
-                      <span className="text-[11px] text-text-dim font-display mb-2 block">기간 수익률</span>
-                      <div className="grid grid-cols-4 gap-3">
-                        {PERIOD_KEYS.map((key) => {
-                          const ret = t.periodReturns?.[key];
-                          if (!ret) {
-                            return (
-                              <div key={key} className="text-center">
-                                <span className="text-[11px] text-text-dim font-display block mb-1">{key}</span>
-                                <span className="text-xs font-display text-text-dim">—</span>
-                              </div>
-                            );
-                          }
-                          const up = ret.changePercent >= 0;
-                          const barW = Math.min(100, Math.abs(ret.changePercent) * 1.5);
-                          return (
-                            <div key={key} className="text-center">
-                              <span className="text-[11px] text-text-dim font-display block mb-1">{key}</span>
-                              <span className={`text-xs font-display font-bold ${up ? 'text-accent-green' : 'text-accent-red'}`}>
-                                {up ? '+' : ''}{formatNumber(ret.changePercent)}%
-                              </span>
-                              <div className="mt-1 h-1 bg-bg-primary rounded-full overflow-hidden">
-                                <div className={`h-full rounded-full ${up ? 'bg-accent-green/60' : 'bg-accent-red/60'}`} style={{ width: `${barW}%` }} />
-                              </div>
+                        {/* Period returns */}
+                        {t.periodReturns && (
+                          <div className="pt-3 border-t border-bg-tertiary/50">
+                            <span className="text-[11px] text-text-dim font-display mb-2 block">기간 수익률</span>
+                            <div className="grid grid-cols-4 gap-3">
+                              {PERIOD_KEYS.map((key) => {
+                                const ret = t.periodReturns?.[key];
+                                if (!ret) {
+                                  return (
+                                    <div key={key} className="text-center">
+                                      <span className="text-[11px] text-text-dim font-display block mb-1">{key}</span>
+                                      <span className="text-xs font-display text-text-dim">—</span>
+                                    </div>
+                                  );
+                                }
+                                const up = ret.changePercent >= 0;
+                                const barW = Math.min(100, Math.abs(ret.changePercent) * 1.5);
+                                return (
+                                  <div key={key} className="text-center">
+                                    <span className="text-[11px] text-text-dim font-display block mb-1">{key}</span>
+                                    <span className={`text-xs font-display font-bold ${up ? 'text-accent-green' : 'text-accent-red'}`}>
+                                      {up ? '+' : ''}{formatNumber(ret.changePercent)}%
+                                    </span>
+                                    <div className="mt-1 h-1 bg-bg-primary rounded-full overflow-hidden">
+                                      <div className={`h-full rounded-full ${up ? 'bg-accent-green/60' : 'bg-accent-red/60'}`} style={{ width: `${barW}%` }} />
+                                    </div>
+                                  </div>
+                                );
+                              })}
                             </div>
-                          );
-                        })}
+                          </div>
+                        )}
+
+                        {/* Cost basis input */}
+                        <div className="flex items-center gap-3 pt-3 border-t border-bg-tertiary/50">
+                          <span className="text-[11px] text-text-dim font-display shrink-0">평균 단가</span>
+                          <div className="relative flex-1 max-w-[140px]">
+                            <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-text-dim font-display">$</span>
+                            <input
+                              type="number"
+                              inputMode="decimal"
+                              step="any"
+                              placeholder="0.00"
+                              value={getEditValue(t.symbol)}
+                              onChange={(e) => handleCostChange(t.symbol, e.target.value)}
+                              onBlur={() => handleCostSave(t.symbol)}
+                              onKeyDown={(e) => { if (e.key === 'Enter') handleCostSave(t.symbol); }}
+                              onClick={(e) => e.stopPropagation()}
+                              className="w-full pl-5 pr-2 py-1.5 rounded-md bg-bg-primary border border-bg-tertiary text-sm font-display text-text-primary placeholder:text-text-dim/50 focus:outline-none focus:border-accent-blue/50 transition-colors"
+                            />
+                          </div>
+                          {plPercent !== null && (
+                            <span className={`text-sm font-display font-bold ${plUp ? 'text-accent-blue' : 'text-accent-red'}`}>
+                              {plUp ? '+' : ''}{formatNumber(plPercent)}%
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </div>
-                  )}
-
-                  {/* Cost basis input */}
-                  <div className="flex items-center gap-3 pt-3 border-t border-bg-tertiary/50">
-                    <span className="text-[11px] text-text-dim font-display shrink-0">평균 단가</span>
-                    <div className="relative flex-1 max-w-[140px]">
-                      <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-text-dim font-display">$</span>
-                      <input
-                        type="number"
-                        inputMode="decimal"
-                        step="any"
-                        placeholder="0.00"
-                        value={getEditValue(t.symbol)}
-                        onChange={(e) => handleCostChange(t.symbol, e.target.value)}
-                        onBlur={() => handleCostSave(t.symbol)}
-                        onKeyDown={(e) => { if (e.key === 'Enter') handleCostSave(t.symbol); }}
-                        onClick={(e) => e.stopPropagation()}
-                        className="w-full pl-5 pr-2 py-1.5 rounded-md bg-bg-primary border border-bg-tertiary text-sm font-display text-text-primary placeholder:text-text-dim/50 focus:outline-none focus:border-accent-blue/50 transition-colors"
-                      />
-                    </div>
-                    {plPercent !== null && (
-                      <span className={`text-sm font-display font-bold ${plUp ? 'text-accent-blue' : 'text-accent-red'}`}>
-                        {plUp ? '+' : ''}{formatNumber(plPercent)}%
-                      </span>
-                    )}
                   </div>
                 </div>
-              </div>
+              )}
             </div>
           );
         })}

@@ -5,6 +5,7 @@ import { MarketData } from '@/lib/types';
 import { DEFAULT_TICKERS, loadTickers, saveTickers, formatTimestamp } from '@/lib/utils';
 import FearGreedGauge from '@/components/FearGreedGauge';
 import VIXCard from '@/components/VIXCard';
+import MacroDashboard from '@/components/MacroDashboard';
 import TickerTable from '@/components/TickerTable';
 import TickerEditor from '@/components/TickerEditor';
 
@@ -74,6 +75,11 @@ export default function Home() {
     saveTickers(newTickers);
   };
 
+  const handleDeleteTicker = (symbol: string) => {
+    const newTickers = tickers.filter((t) => t !== symbol);
+    handleTickerUpdate(newTickers);
+  };
+
   return (
     <main className="relative z-10 min-h-screen px-4 py-6 max-w-5xl mx-auto">
       {/* Header */}
@@ -124,8 +130,11 @@ export default function Home() {
         <VIXCard data={data?.vix ?? null} loading={loading} />
       </div>
 
+      {/* Macro dashboard */}
+      <MacroDashboard macro={data?.macro ?? []} loading={loading} />
+
       {/* Ticker table */}
-      <TickerTable tickers={data?.tickers ?? []} loading={loading} tickerOrder={tickers} onReorder={handleTickerUpdate} />
+      <TickerTable tickers={data?.tickers ?? []} loading={loading} tickerOrder={tickers} onReorder={handleTickerUpdate} onDelete={handleDeleteTicker} />
 
       {/* Footer */}
       <footer className="mt-8 pb-4 text-center">
