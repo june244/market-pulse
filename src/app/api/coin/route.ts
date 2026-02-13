@@ -107,8 +107,15 @@ export async function GET() {
     COINS.map((c) => fetchCoinData(c.symbol, c.label))
   );
 
-  return NextResponse.json({
-    coins: results.filter(Boolean),
-    updatedAt: new Date().toISOString(),
-  });
+  return NextResponse.json(
+    {
+      coins: results.filter(Boolean),
+      updatedAt: new Date().toISOString(),
+    },
+    {
+      headers: {
+        'Cache-Control': 's-maxage=30, stale-while-revalidate=60',
+      },
+    }
+  );
 }

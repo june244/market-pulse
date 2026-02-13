@@ -268,17 +268,24 @@ export async function GET(request: NextRequest) {
     };
   });
 
-  return NextResponse.json({
-    fearGreed,
-    vix: vixQuote
-      ? {
-          value: vixQuote.price,
-          change: vixQuote.change,
-          changePercent: vixQuote.changePercent,
-        }
-      : null,
-    macro,
-    tickers: tickersWithReturns,
-    updatedAt: new Date().toISOString(),
-  });
+  return NextResponse.json(
+    {
+      fearGreed,
+      vix: vixQuote
+        ? {
+            value: vixQuote.price,
+            change: vixQuote.change,
+            changePercent: vixQuote.changePercent,
+          }
+        : null,
+      macro,
+      tickers: tickersWithReturns,
+      updatedAt: new Date().toISOString(),
+    },
+    {
+      headers: {
+        'Cache-Control': 's-maxage=30, stale-while-revalidate=60',
+      },
+    }
+  );
 }

@@ -12,6 +12,7 @@ import TickerEditor from '@/components/TickerEditor';
 import BottomNav from '@/components/BottomNav';
 
 const CoinTab = dynamic(() => import('@/components/CoinTab'), {
+  ssr: false,
   loading: () => (
     <div className="space-y-4">
       {[0, 1].map((i) => (
