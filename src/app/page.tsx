@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { MarketData } from '@/lib/types';
 import { DEFAULT_TICKERS, loadTickers, saveTickers, formatTimestamp } from '@/lib/utils';
 import FearGreedGauge from '@/components/FearGreedGauge';
@@ -8,7 +8,9 @@ import VIXCard from '@/components/VIXCard';
 import MacroDashboard from '@/components/MacroDashboard';
 import TickerTable from '@/components/TickerTable';
 import TickerEditor from '@/components/TickerEditor';
+import BottomNav from '@/components/BottomNav';
 
+type Tab = 'dashboard' | 'watchlist';
 const REFRESH_INTERVAL = 60_000; // 1 minute
 
 export default function Home() {
@@ -17,6 +19,7 @@ export default function Home() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [lastRefresh, setLastRefresh] = useState<string>('');
+  const [activeTab, setActiveTab] = useState<Tab>('dashboard');
 
   // Load saved tickers from localStorage on mount (overrides defaults)
   useEffect(() => {
@@ -80,8 +83,85 @@ export default function Home() {
     handleTickerUpdate(newTickers);
   };
 
+  // ── Swipe-to-switch tab (mobile only) ──
+  const touchStart = useRef<{ x: number; y: number; time: number } | null>(null);
+  const swipeDelta = useRef(0);
+  const directionLocked = useRef<'h' | 'v' | null>(null);
+  const trackRef = useRef<HTMLDivElement>(null);
+  const SWIPE_THRESHOLD = 50;
+  const LOCK_THRESHOLD = 10;
+
+  const tabIndex = activeTab === 'dashboard' ? 0 : 1;
+
+  const onTouchStart = useCallback((e: React.TouchEvent) => {
+    const t = e.touches[0];
+    touchStart.current = { x: t.clientX, y: t.clientY, time: Date.now() };
+    swipeDelta.current = 0;
+    directionLocked.current = null;
+    if (trackRef.current) trackRef.current.style.transition = 'none';
+  }, []);
+
+  const onTouchMove = useCallback((e: React.TouchEvent) => {
+    if (!touchStart.current) return;
+    const t = e.touches[0];
+    const dx = t.clientX - touchStart.current.x;
+    const dy = t.clientY - touchStart.current.y;
+
+    if (!directionLocked.current) {
+      if (Math.abs(dx) > LOCK_THRESHOLD || Math.abs(dy) > LOCK_THRESHOLD) {
+        directionLocked.current = Math.abs(dx) > Math.abs(dy) ? 'h' : 'v';
+      }
+    }
+    if (directionLocked.current !== 'h') return;
+
+    // Clamp: don't swipe past edges
+    const clamped = tabIndex === 0 ? Math.min(0, dx) : Math.max(0, dx);
+    swipeDelta.current = clamped;
+
+    if (trackRef.current) {
+      const base = -tabIndex * 100;
+      const pxToPercent = (clamped / window.innerWidth) * 100;
+      trackRef.current.style.transform = `translateX(${base + pxToPercent}%)`;
+    }
+  }, [tabIndex]);
+
+  const onTouchEnd = useCallback(() => {
+    if (!touchStart.current) return;
+    const dx = swipeDelta.current;
+    const elapsed = Date.now() - touchStart.current.time;
+    const velocity = Math.abs(dx) / elapsed; // px/ms
+
+    if (trackRef.current) trackRef.current.style.transition = 'transform 0.3s cubic-bezier(0.4,0,0.2,1)';
+
+    const shouldSwitch = Math.abs(dx) > SWIPE_THRESHOLD || velocity > 0.4;
+    if (shouldSwitch && directionLocked.current === 'h') {
+      if (dx < 0 && activeTab === 'dashboard') setActiveTab('watchlist');
+      else if (dx > 0 && activeTab === 'watchlist') setActiveTab('dashboard');
+    }
+
+    // Snap back
+    if (trackRef.current) {
+      const newIdx = (shouldSwitch && directionLocked.current === 'h')
+        ? (dx < 0 && activeTab === 'dashboard' ? 1 : dx > 0 && activeTab === 'watchlist' ? 0 : tabIndex)
+        : tabIndex;
+      trackRef.current.style.transform = `translateX(${-newIdx * 100}%)`;
+    }
+
+    touchStart.current = null;
+    swipeDelta.current = 0;
+    directionLocked.current = null;
+  }, [activeTab, tabIndex]);
+
+  // Sync track position when tab changes via bottom nav
+  useEffect(() => {
+    if (trackRef.current) {
+      trackRef.current.style.transition = 'transform 0.3s cubic-bezier(0.4,0,0.2,1)';
+      trackRef.current.style.transform = `translateX(${-tabIndex * 100}%)`;
+    }
+  }, [tabIndex]);
+
   return (
-    <main className="relative z-10 min-h-screen px-4 py-6 max-w-5xl mx-auto">
+    <main className="relative z-10 min-h-screen px-4 py-6 pb-20 md:pb-6 max-w-5xl mx-auto">
       {/* Header */}
       <header className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-8 opacity-0 animate-fade-in">
         <div>
@@ -124,17 +204,42 @@ export default function Home() {
         </div>
       )}
 
-      {/* Sentiment row */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-        <FearGreedGauge data={data?.fearGreed ?? null} loading={loading} />
-        <VIXCard data={data?.vix ?? null} loading={loading} />
+      {/* ── Mobile swipeable tabs ── */}
+      <div
+        className="md:hidden overflow-hidden -mx-4"
+        onTouchStart={onTouchStart}
+        onTouchMove={onTouchMove}
+        onTouchEnd={onTouchEnd}
+      >
+        <div
+          ref={trackRef}
+          className="flex will-change-transform"
+          style={{ transform: `translateX(${-tabIndex * 100}%)`, transition: 'transform 0.3s cubic-bezier(0.4,0,0.2,1)' }}
+        >
+          {/* Tab 0: Dashboard */}
+          <div className="w-full flex-shrink-0 px-4">
+            <div className="grid grid-cols-1 gap-4 mb-4">
+              <FearGreedGauge data={data?.fearGreed ?? null} loading={loading} />
+              <VIXCard data={data?.vix ?? null} loading={loading} />
+            </div>
+            <MacroDashboard macro={data?.macro ?? []} loading={loading} />
+          </div>
+          {/* Tab 1: Watchlist */}
+          <div className="w-full flex-shrink-0 px-4">
+            <TickerTable tickers={data?.tickers ?? []} loading={loading} tickerOrder={tickers} onReorder={handleTickerUpdate} onDelete={handleDeleteTicker} />
+          </div>
+        </div>
       </div>
 
-      {/* Macro dashboard */}
-      <MacroDashboard macro={data?.macro ?? []} loading={loading} />
-
-      {/* Ticker table */}
-      <TickerTable tickers={data?.tickers ?? []} loading={loading} tickerOrder={tickers} onReorder={handleTickerUpdate} onDelete={handleDeleteTicker} />
+      {/* ── Desktop: all content visible (no tabs) ── */}
+      <div className="hidden md:block">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+          <FearGreedGauge data={data?.fearGreed ?? null} loading={loading} />
+          <VIXCard data={data?.vix ?? null} loading={loading} />
+        </div>
+        <MacroDashboard macro={data?.macro ?? []} loading={loading} />
+        <TickerTable tickers={data?.tickers ?? []} loading={loading} tickerOrder={tickers} onReorder={handleTickerUpdate} onDelete={handleDeleteTicker} />
+      </div>
 
       {/* Footer */}
       <footer className="mt-8 pb-4 text-center">
@@ -145,6 +250,9 @@ export default function Home() {
           자동 갱신 60초 · 종가 기준 · 실시간 데이터가 아닐 수 있음
         </p>
       </footer>
+
+      {/* Mobile bottom navigation */}
+      <BottomNav activeTab={activeTab} onTabChange={setActiveTab} />
     </main>
   );
 }
