@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import dynamic from 'next/dynamic';
 import { MarketData } from '@/lib/types';
-import { DEFAULT_TICKERS, loadTickers, saveTickers, formatTimestamp, loadTheme, saveTheme, Theme } from '@/lib/utils';
+import { DEFAULT_TICKERS, loadTickers, saveTickers, formatTimestamp, loadTheme, saveTheme, loadCostBasis, Theme } from '@/lib/utils';
 import FearGreedGauge from '@/components/FearGreedGauge';
 import VIXCard from '@/components/VIXCard';
 import MacroDashboard from '@/components/MacroDashboard';
@@ -11,6 +11,7 @@ import TickerTable from '@/components/TickerTable';
 import TickerEditor from '@/components/TickerEditor';
 import BottomNav from '@/components/BottomNav';
 import ThemePicker from '@/components/ThemePicker';
+import PortfolioRoast from '@/components/PortfolioRoast';
 
 const CoinTab = dynamic(() => import('@/components/CoinTab'), {
   ssr: false,
@@ -48,6 +49,9 @@ export default function Home() {
   const [refreshKey, setRefreshKey] = useState(0);
   const [theme, setTheme] = useState<Theme>('dark');
   const [shakeToast, setShakeToast] = useState(false);
+  const [roastOpen, setRoastOpen] = useState(false);
+  const [roastCostBasis, setRoastCostBasis] = useState<Record<string, number>>({});
+  const tapTimestamps = useRef<number[]>([]);
 
   // Load saved tickers + theme from localStorage on mount
   useEffect(() => {
@@ -259,6 +263,22 @@ export default function Home() {
     directionLocked.current = null;
   }, [tabIndex, maxIndex]);
 
+  // ── Triple-tap header to open roast ──
+  const handleHeaderTap = useCallback(() => {
+    const now = Date.now();
+    tapTimestamps.current.push(now);
+    // Keep only last 3
+    if (tapTimestamps.current.length > 3) tapTimestamps.current.shift();
+    if (tapTimestamps.current.length === 3) {
+      const elapsed = now - tapTimestamps.current[0];
+      if (elapsed < 600) {
+        tapTimestamps.current = [];
+        setRoastCostBasis(loadCostBasis());
+        setRoastOpen(true);
+      }
+    }
+  }, []);
+
   // Sync track position when tab changes via bottom nav
   useEffect(() => {
     if (trackRef.current) {
@@ -272,7 +292,7 @@ export default function Home() {
       {/* Header */}
       <header className="relative z-[100] flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-8 opacity-0 animate-fade-in">
         <div>
-          <h1 className="font-display text-2xl font-bold tracking-tight text-text-primary flex items-center gap-2">
+          <h1 onClick={handleHeaderTap} className="font-display text-2xl font-bold tracking-tight text-text-primary flex items-center gap-2 cursor-pointer select-none">
             <span
               className="inline-block w-2 h-2 rounded-full bg-accent-green animate-pulse-slow"
               style={{ boxShadow: '0 0 8px rgba(0,255,135,0.5)' }}
@@ -378,6 +398,15 @@ export default function Home() {
 
       {/* Mobile bottom navigation */}
       <BottomNav activeTab={activeTab} onTabChange={setActiveTab} />
+
+      {/* Portfolio Roast modal */}
+      {roastOpen && (
+        <PortfolioRoast
+          tickers={data?.tickers ?? []}
+          costBasis={roastCostBasis}
+          onClose={() => setRoastOpen(false)}
+        />
+      )}
     </main>
   );
 }
