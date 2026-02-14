@@ -339,7 +339,7 @@ function TickerTable({ tickers, loading, tickerOrder, onReorder, onDelete }: Pro
   }
 
   return (
-    <div className="bg-bg-secondary rounded-2xl p-6 card-hover opacity-0 animate-fade-in stagger-2">
+    <div data-no-swipe className="bg-bg-secondary rounded-2xl p-6 card-hover opacity-0 animate-fade-in stagger-2">
       <div className="flex items-center justify-between mb-5">
         <h2 className="font-display text-sm font-medium tracking-wider text-text-secondary uppercase">
           Watchlist

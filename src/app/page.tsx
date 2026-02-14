@@ -12,6 +12,7 @@ import TickerEditor from '@/components/TickerEditor';
 import BottomNav from '@/components/BottomNav';
 import ThemePicker from '@/components/ThemePicker';
 import PortfolioRoast from '@/components/PortfolioRoast';
+import MarketThermometer from '@/components/MarketThermometer';
 
 const CoinTab = dynamic(() => import('@/components/CoinTab'), {
   ssr: false,
@@ -194,9 +195,21 @@ export default function Home() {
   const maxIndex = TABS.length - 1;
 
   const onTouchStart = useCallback((e: React.TouchEvent) => {
-    // Skip tab swipe if touch starts inside a horizontally scrollable container
+    // Skip tab swipe if touch starts inside an interactive zone
     let el = e.target as HTMLElement | null;
     while (el && el !== e.currentTarget) {
+      // Explicit opt-out via data attribute
+      if ((el as HTMLElement).dataset?.noSwipe != null) {
+        touchStart.current = null;
+        return;
+      }
+      // touch-none: charts, drag handles; touch-pan-y: ticker swipe rows
+      const cls = el.classList;
+      if (cls.contains('touch-none') || cls.contains('touch-pan-y')) {
+        touchStart.current = null;
+        return;
+      }
+      // horizontally scrollable container (macro dashboard)
       if (el.scrollWidth > el.clientWidth && getComputedStyle(el).overflowX !== 'hidden' && getComputedStyle(el).overflowX !== 'visible') {
         touchStart.current = null;
         return;
@@ -360,6 +373,7 @@ export default function Home() {
               <FearGreedGauge data={data?.fearGreed ?? null} loading={loading} />
               <VIXCard data={data?.vix ?? null} loading={loading} />
             </div>
+            <MarketThermometer fearGreed={data?.fearGreed ?? null} vix={data?.vix ?? null} macro={data?.macro ?? []} loading={loading} />
             <MacroDashboard macro={data?.macro ?? []} loading={loading} />
           </div>
           {/* Tab 1: Coin */}
@@ -379,6 +393,7 @@ export default function Home() {
           <FearGreedGauge data={data?.fearGreed ?? null} loading={loading} />
           <VIXCard data={data?.vix ?? null} loading={loading} />
         </div>
+        <MarketThermometer fearGreed={data?.fearGreed ?? null} vix={data?.vix ?? null} macro={data?.macro ?? []} loading={loading} />
         <MacroDashboard macro={data?.macro ?? []} loading={loading} />
         <CoinTab refreshKey={refreshKey} />
         <div className="mt-4">
