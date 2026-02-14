@@ -12,7 +12,7 @@ interface Props {
 function FearGreedGauge({ data, loading }: Props) {
   if (loading || !data) {
     return (
-      <div className="bg-bg-secondary rounded-2xl p-6 card-hover animate-pulse">
+      <div className="bg-bg-secondary rounded-2xl p-4 sm:p-6 card-hover animate-pulse">
         <div className="h-6 w-40 bg-bg-tertiary rounded mb-6" />
         <div className="flex justify-center">
           <div className="w-48 h-48 rounded-full bg-bg-tertiary" />
@@ -50,10 +50,10 @@ function FearGreedGauge({ data, loading }: Props) {
   const needle = polarToCartesian(scoreAngle);
 
   return (
-    <div className="bg-bg-secondary rounded-2xl p-6 card-hover opacity-0 animate-fade-in">
+    <div className="bg-bg-secondary rounded-2xl p-4 sm:p-6 card-hover opacity-0 animate-fade-in">
       <div className="flex items-center justify-between mb-2">
-        <h2 className="font-display text-sm font-medium tracking-wider text-text-secondary uppercase">
-          Fear &amp; Greed Index
+        <h2 className="font-display text-xs sm:text-sm font-medium tracking-wider text-text-secondary uppercase">
+          Fear &amp; Greed
         </h2>
         <span
           className="text-xs font-display font-medium px-2 py-0.5 rounded-full"
@@ -64,7 +64,7 @@ function FearGreedGauge({ data, loading }: Props) {
       </div>
 
       <div className="flex flex-col items-center mt-4">
-        <svg viewBox="0 0 200 140" className="w-56 h-auto">
+        <svg viewBox="0 0 200 140" className="w-full max-w-56 h-auto">
           <path
             d={describeArc(startAngle, endAngle)}
             fill="none"

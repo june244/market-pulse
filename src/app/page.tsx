@@ -292,12 +292,13 @@ export default function Home() {
     }
   }, []);
 
-  // Sync track position when tab changes via bottom nav
+  // Sync track position when tab changes via bottom nav + scroll to top
   useEffect(() => {
     if (trackRef.current) {
       trackRef.current.style.transition = 'transform 0.3s cubic-bezier(0.4,0,0.2,1)';
       trackRef.current.style.transform = `translateX(${-tabIndex * 100}%)`;
     }
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   }, [tabIndex]);
 
   return (
@@ -369,11 +370,13 @@ export default function Home() {
         >
           {/* Tab 0: Dashboard */}
           <div className="w-full flex-shrink-0 px-4">
-            <div className="grid grid-cols-1 gap-4 mb-4">
+            <div className="grid grid-cols-2 gap-3 mb-4">
               <FearGreedGauge data={data?.fearGreed ?? null} loading={loading} />
               <VIXCard data={data?.vix ?? null} loading={loading} />
             </div>
-            <MarketThermometer fearGreed={data?.fearGreed ?? null} vix={data?.vix ?? null} macro={data?.macro ?? []} loading={loading} />
+            <div className="my-4">
+              <MarketThermometer fearGreed={data?.fearGreed ?? null} vix={data?.vix ?? null} macro={data?.macro ?? []} loading={loading} />
+            </div>
             <MacroDashboard macro={data?.macro ?? []} loading={loading} />
           </div>
           {/* Tab 1: Coin */}

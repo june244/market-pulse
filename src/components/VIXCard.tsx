@@ -12,7 +12,7 @@ interface Props {
 function VIXCard({ data, loading }: Props) {
   if (loading || !data) {
     return (
-      <div className="bg-bg-secondary rounded-2xl p-6 card-hover animate-pulse">
+      <div className="bg-bg-secondary rounded-2xl p-4 sm:p-6 card-hover animate-pulse">
         <div className="h-6 w-32 bg-bg-tertiary rounded mb-4" />
         <div className="h-12 w-24 bg-bg-tertiary rounded" />
       </div>
@@ -27,9 +27,9 @@ function VIXCard({ data, loading }: Props) {
   const barPercent = Math.min((data.value / maxVIX) * 100, 100);
 
   return (
-    <div className="bg-bg-secondary rounded-2xl p-6 card-hover opacity-0 animate-fade-in stagger-1">
+    <div className="bg-bg-secondary rounded-2xl p-4 sm:p-6 card-hover opacity-0 animate-fade-in stagger-1">
       <div className="flex items-center justify-between mb-1">
-        <h2 className="font-display text-sm font-medium tracking-wider text-text-secondary uppercase">
+        <h2 className="font-display text-xs sm:text-sm font-medium tracking-wider text-text-secondary uppercase">
           CBOE VIX
         </h2>
         <span
@@ -43,7 +43,7 @@ function VIXCard({ data, loading }: Props) {
 
       <div className="flex items-end gap-3 mb-5">
         <span
-          className="text-5xl font-display font-bold tracking-tight"
+          className="text-3xl sm:text-5xl font-display font-bold tracking-tight"
           style={{ color: vixInfo.color }}
         >
           {formatNumber(data.value)}
