@@ -136,11 +136,14 @@ export default function Home() {
     const DEBOUNCE = 3000;
 
     const handleMotion = (e: DeviceMotionEvent) => {
-      const acc = e.accelerationIncludingGravity;
+      // Prefer acceleration (without gravity) for cleaner shake detection
+      const acc = e.acceleration?.x != null ? e.acceleration : e.accelerationIncludingGravity;
       if (!acc || acc.x == null || acc.y == null || acc.z == null) return;
       const magnitude = Math.sqrt(acc.x * acc.x + acc.y * acc.y + acc.z * acc.z);
+      // accelerationIncludingGravity rests at ~9.8, so use higher threshold for it
+      const threshold = e.acceleration?.x != null ? 15 : SHAKE_THRESHOLD;
       const now = Date.now();
-      if (magnitude > SHAKE_THRESHOLD && now - lastShake > DEBOUNCE) {
+      if (magnitude > threshold && now - lastShake > DEBOUNCE) {
         lastShake = now;
         setLoading(true);
         fetchData();
@@ -151,17 +154,22 @@ export default function Home() {
     };
 
     // iOS 13+ permission
+    let granted = false;
     const dmEvent = DeviceMotionEvent as any;
     if (typeof dmEvent.requestPermission === 'function') {
       const requestOnGesture = () => {
+        if (granted) return;
         dmEvent.requestPermission().then((state: string) => {
-          if (state === 'granted') window.addEventListener('devicemotion', handleMotion);
+          if (state === 'granted') {
+            granted = true;
+            window.addEventListener('devicemotion', handleMotion);
+            window.removeEventListener('touchend', requestOnGesture, true);
+          }
         }).catch(() => {});
-        window.removeEventListener('touchstart', requestOnGesture, true);
       };
-      window.addEventListener('touchstart', requestOnGesture, true);
+      window.addEventListener('touchend', requestOnGesture, true);
       return () => {
-        window.removeEventListener('touchstart', requestOnGesture, true);
+        window.removeEventListener('touchend', requestOnGesture, true);
         window.removeEventListener('devicemotion', handleMotion);
       };
     } else {

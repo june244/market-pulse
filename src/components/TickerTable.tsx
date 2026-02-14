@@ -387,7 +387,7 @@ function TickerTable({ tickers, loading, tickerOrder, onReorder, onDelete }: Pro
                   rowRefs.current.delete(t.symbol);
                 }
               }}
-              className={`rounded-xl transition-all duration-150 opacity-0 animate-slide-up overflow-hidden ${
+              className={`relative rounded-xl transition-all duration-150 opacity-0 animate-slide-up ${
                 isOpen ? 'bg-bg-tertiary/40' : ''
               } ${isDragging ? 'opacity-50 scale-[0.97]' : ''} ${
                 isDropTarget ? 'ring-1 ring-accent-blue/40 bg-accent-blue/[0.03]' : ''
