@@ -1,13 +1,12 @@
 import { NextResponse } from 'next/server';
 import { DayScore, HistoryResponse } from '@/lib/types';
+import { getSnapshots, backfillIfMissing } from '@/lib/historyStore';
 
 const YAHOO_UA =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
 
-// ── In-memory server cache (survives across requests, cleared on redeploy) ──
-let cachedResponse: HistoryResponse | null = null;
-let cacheExpiry = 0;
-const CACHE_TTL = 60 * 60 * 1000; // 1 hour
+// ── In-memory flag: only backfill from external APIs once per process ──
+let backfilled = false;
 
 function toETDate(ts: number): string {
   return new Date(ts * 1000).toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
@@ -81,10 +80,7 @@ function computeComposite(
   dxyChange: number | null,
 ): number {
   const entries: { weight: number; score: number }[] = [];
-
-  if (fg != null) {
-    entries.push({ weight: 40, score: clamp(fg, 0, 100) });
-  }
+  if (fg != null) entries.push({ weight: 40, score: clamp(fg, 0, 100) });
   if (vix != null) {
     const normalized = 100 - ((clamp(vix, 10, 40) - 10) / 30) * 100;
     entries.push({ weight: 30, score: Math.round(normalized) });
@@ -97,23 +93,19 @@ function computeComposite(
     const normalized = 50 - (clamp(dxyChange, -2, 2) / 2) * 50;
     entries.push({ weight: 15, score: Math.round(normalized) });
   }
-
   if (entries.length === 0) return 50;
-
   const totalWeight = entries.reduce((s, e) => s + e.weight, 0);
-  const composite = Math.round(
-    entries.reduce((s, e) => s + (e.score * e.weight) / totalWeight, 0),
+  return clamp(
+    Math.round(entries.reduce((s, e) => s + (e.score * e.weight) / totalWeight, 0)),
+    0,
+    100,
   );
-  return clamp(composite, 0, 100);
 }
 
-export async function GET() {
-  // Return cached data if still fresh
-  if (cachedResponse && Date.now() < cacheExpiry) {
-    return NextResponse.json(cachedResponse, {
-      headers: { 'Cache-Control': 's-maxage=3600, stale-while-revalidate=7200' },
-    });
-  }
+/** Fetch external APIs once and backfill the shared store for past dates */
+async function backfillFromAPIs() {
+  if (backfilled) return;
+  backfilled = true;
 
   try {
     const [fgMap, vixData, tnxData, dxyData] = await Promise.all([
@@ -123,7 +115,6 @@ export async function GET() {
       fetchYahooChart('DX-Y.NYB'),
     ]);
 
-    // Build lookup maps: date -> value
     const vixMap = new Map<string, number>();
     for (let i = 0; i < vixData.dates.length; i++) {
       vixMap.set(vixData.dates[i], vixData.closes[i]);
@@ -141,10 +132,38 @@ export async function GET() {
       if (dxyChanges[i] != null) dxyMap.set(dxyData.dates[i], dxyChanges[i]!);
     }
 
-    // Use VIX dates as source of truth for market open days
-    const marketOpenDates = new Set(vixData.dates);
+    // Backfill market-open dates (VIX = source of truth)
+    for (const date of vixData.dates) {
+      const fg = fgMap.get(date) ?? null;
+      const vix = vixMap.get(date) ?? null;
+      const tnxChange = tnxMap.get(date) ?? null;
+      const dxyChange = dxyMap.get(date) ?? null;
 
-    // Generate all dates from 3 months ago to today
+      backfillIfMissing(date, {
+        date,
+        composite: computeComposite(fg, vix, tnxChange, dxyChange),
+        fg,
+        vix: vix != null ? Math.round(vix * 10) / 10 : null,
+        tnxChange: tnxChange != null ? Math.round(tnxChange * 100) / 100 : null,
+        dxyChange: dxyChange != null ? Math.round(dxyChange * 100) / 100 : null,
+        marketOpen: true,
+      });
+    }
+  } catch (e) {
+    console.error('History backfill error:', e);
+    // Allow retry on next request
+    backfilled = false;
+  }
+}
+
+export async function GET() {
+  try {
+    // Backfill from external APIs (once per server lifecycle)
+    await backfillFromAPIs();
+
+    const store = getSnapshots();
+
+    // Build date range: 3 months ago (1st of month) → today
     const now = new Date();
     const threeMonthsAgo = new Date(now);
     threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
@@ -156,26 +175,22 @@ export async function GET() {
 
     while (cursor <= now) {
       const dateStr = cursor.toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
-      const marketOpen = marketOpenDates.has(dateStr);
+      const saved = store.get(dateStr);
 
-      const fg = fgMap.get(dateStr) ?? null;
-      const vix = vixMap.get(dateStr) ?? null;
-      const tnxChange = tnxMap.get(dateStr) ?? null;
-      const dxyChange = dxyMap.get(dateStr) ?? null;
-
-      const composite = marketOpen
-        ? computeComposite(fg, vix, tnxChange, dxyChange)
-        : 50;
-
-      days.push({
-        date: dateStr,
-        composite,
-        fg,
-        vix,
-        tnxChange: tnxChange != null ? Math.round(tnxChange * 100) / 100 : null,
-        dxyChange: dxyChange != null ? Math.round(dxyChange * 100) / 100 : null,
-        marketOpen,
-      });
+      if (saved) {
+        days.push(saved);
+      } else {
+        // No data → market was closed (weekend/holiday)
+        days.push({
+          date: dateStr,
+          composite: 50,
+          fg: null,
+          vix: null,
+          tnxChange: null,
+          dxyChange: null,
+          marketOpen: false,
+        });
+      }
 
       if (dateStr === todayStr) break;
       cursor.setDate(cursor.getDate() + 1);
@@ -186,14 +201,8 @@ export async function GET() {
       updatedAt: new Date().toISOString(),
     };
 
-    // Store in server memory cache
-    cachedResponse = response;
-    cacheExpiry = Date.now() + CACHE_TTL;
-
     return NextResponse.json(response, {
-      headers: {
-        'Cache-Control': 's-maxage=3600, stale-while-revalidate=7200',
-      },
+      headers: { 'Cache-Control': 's-maxage=3600, stale-while-revalidate=7200' },
     });
   } catch (e: any) {
     console.error('History API error:', e);

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { PeriodReturns, MacroItem } from '@/lib/types';
+import { recordSnapshot } from '@/lib/historyStore';
 
 const MACRO_SYMBOLS: Record<string, string> = {
   '^TNX': '10Y Yield',
@@ -266,6 +267,16 @@ export async function GET(request: NextRequest) {
       periodReturns: hist?.periodReturns ?? undefined,
       sparkline: hist?.sparkline ?? undefined,
     };
+  });
+
+  // Record today's snapshot for calendar heatmap
+  const tnxQuote = macro.find((m) => m.symbol === '^TNX');
+  const dxyQuote = macro.find((m) => m.symbol === 'DX-Y.NYB');
+  recordSnapshot({
+    fg: fearGreed?.score ?? null,
+    vix: vixQuote?.price ?? null,
+    tnxChange: tnxQuote?.changePercent ?? null,
+    dxyChange: dxyQuote?.changePercent ?? null,
   });
 
   return NextResponse.json(
