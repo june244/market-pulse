@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { DayScore, HistoryResponse } from '@/lib/types';
 
 // Same 7-level color scheme as MarketThermometer
@@ -315,9 +316,10 @@ function HeatmapCalendar() {
         </div>
       </div>
 
-      {/* Day detail modal */}
-      {selectedDay && (
-        <DayDetail day={selectedDay} onClose={() => setSelectedDay(null)} />
+      {/* Day detail modal — portal to body so it escapes overflow-hidden swipe track */}
+      {selectedDay && createPortal(
+        <DayDetail day={selectedDay} onClose={() => setSelectedDay(null)} />,
+        document.body,
       )}
     </div>
   );
