@@ -56,3 +56,18 @@ export interface MarketData {
 }
 
 export type SentimentLevel = 'extreme-fear' | 'fear' | 'neutral' | 'greed' | 'extreme-greed';
+
+export interface DayScore {
+  date: string;            // "YYYY-MM-DD" (ET timezone)
+  composite: number;       // 0-100
+  fg: number | null;       // Fear & Greed raw score
+  vix: number | null;      // VIX closing price
+  tnxChange: number | null; // 10Y 금리 일간 변화%
+  dxyChange: number | null; // DXY 일간 변화%
+  marketOpen: boolean;
+}
+
+export interface HistoryResponse {
+  days: DayScore[];
+  updatedAt: string;
+}

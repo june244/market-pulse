@@ -36,8 +36,26 @@ const CoinTab = dynamic(() => import('@/components/CoinTab'), {
   ),
 });
 
-type Tab = 'dashboard' | 'coin' | 'watchlist';
-const TABS: Tab[] = ['dashboard', 'coin', 'watchlist'];
+const HeatmapCalendar = dynamic(() => import('@/components/HeatmapCalendar'), {
+  ssr: false,
+  loading: () => (
+    <div className="space-y-6">
+      {[0, 1, 2].map((i) => (
+        <div key={i} className="bg-bg-secondary rounded-2xl p-5">
+          <div className="animate-pulse bg-bg-tertiary rounded h-5 w-32 mb-4" />
+          <div className="grid grid-cols-7 gap-1">
+            {Array.from({ length: 35 }).map((_, j) => (
+              <div key={j} className="animate-pulse bg-bg-tertiary rounded-lg aspect-square" />
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  ),
+});
+
+type Tab = 'dashboard' | 'coin' | 'watchlist' | 'calendar';
+const TABS: Tab[] = ['dashboard', 'coin', 'watchlist', 'calendar'];
 const REFRESH_INTERVAL = 60_000; // 1 minute
 
 export default function Home() {
@@ -158,21 +176,36 @@ export default function Home() {
       }
     };
 
-    // iOS 13+ permission
+    // iOS 13+ permission — persist granted state in localStorage
     let granted = false;
     const dmEvent = DeviceMotionEvent as any;
+    const MOTION_KEY = 'mp_motion_granted';
+
     if (typeof dmEvent.requestPermission === 'function') {
+      const wasGranted = localStorage.getItem(MOTION_KEY) === '1';
+
+      if (wasGranted) {
+        // Already granted in a previous session — register directly
+        granted = true;
+        window.addEventListener('devicemotion', handleMotion);
+      }
+
       const requestOnGesture = () => {
         if (granted) return;
         dmEvent.requestPermission().then((state: string) => {
           if (state === 'granted') {
             granted = true;
+            localStorage.setItem(MOTION_KEY, '1');
             window.addEventListener('devicemotion', handleMotion);
             window.removeEventListener('touchend', requestOnGesture, true);
           }
         }).catch(() => {});
       };
-      window.addEventListener('touchend', requestOnGesture, true);
+
+      if (!wasGranted) {
+        window.addEventListener('touchend', requestOnGesture, true);
+      }
+
       return () => {
         window.removeEventListener('touchend', requestOnGesture, true);
         window.removeEventListener('devicemotion', handleMotion);
@@ -387,6 +420,10 @@ export default function Home() {
           <div className="w-full flex-shrink-0 px-4">
             <TickerTable tickers={data?.tickers ?? []} loading={loading} tickerOrder={tickers} onReorder={handleTickerUpdate} onDelete={handleDeleteTicker} />
           </div>
+          {/* Tab 3: Calendar */}
+          <div className="w-full flex-shrink-0 px-4">
+            <HeatmapCalendar />
+          </div>
         </div>
       </div>
 
@@ -401,6 +438,9 @@ export default function Home() {
         <CoinTab refreshKey={refreshKey} />
         <div className="mt-4">
           <TickerTable tickers={data?.tickers ?? []} loading={loading} tickerOrder={tickers} onReorder={handleTickerUpdate} onDelete={handleDeleteTicker} />
+        </div>
+        <div className="mt-4">
+          <HeatmapCalendar />
         </div>
       </div>
 
