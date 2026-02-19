@@ -71,3 +71,11 @@ export interface HistoryResponse {
   days: DayScore[];
   updatedAt: string;
 }
+
+export interface Trade {
+  id: string;
+  type: 'buy' | 'sell';
+  date: string;        // YYYY-MM-DD
+  price: number;
+  quantity: number;
+}

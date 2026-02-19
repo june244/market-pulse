@@ -1,8 +1,9 @@
 'use client';
 
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { TickerData } from '@/lib/types';
-import { formatNumber, formatVolume, formatMarketCap, loadCostBasis, saveCostBasis } from '@/lib/utils';
+import { TickerData, Trade } from '@/lib/types';
+import { formatNumber, formatVolume, formatMarketCap, loadTrades, saveTrades, calcPosition } from '@/lib/utils';
+import TradeManager from './TradeManager';
 
 const PERIOD_KEYS = ['1M', '3M', '6M', '1Y'] as const;
 const SWIPE_THRESHOLD = 80;
@@ -115,8 +116,7 @@ function spawnConfetti(container: HTMLElement) {
 
 function TickerTable({ tickers, loading, tickerOrder, onReorder, onDelete }: Props) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
-  const [costBasis, setCostBasis] = useState<Record<string, number>>({});
-  const [editingCost, setEditingCost] = useState<Record<string, string>>({});
+  const [allTrades, setAllTrades] = useState<Record<string, Trade[]>>({});
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const celebratedRef = useRef<Set<string>>(new Set());
 
@@ -132,7 +132,7 @@ function TickerTable({ tickers, loading, tickerOrder, onReorder, onDelete }: Pro
   const swipeDidAction = useRef<Set<string>>(new Set());
 
   useEffect(() => {
-    setCostBasis(loadCostBasis());
+    setAllTrades(loadTrades());
   }, []);
 
   // Sort tickers based on tickerOrder
@@ -286,35 +286,23 @@ function TickerTable({ tickers, loading, tickerOrder, onReorder, onDelete }: Pro
     setConfirmDelete(null);
   }, []);
 
-  // --- Cost basis handlers ---
-  const handleCostChange = (symbol: string, value: string) => {
-    setEditingCost((prev) => ({ ...prev, [symbol]: value }));
-  };
-
-  const handleCostSave = (symbol: string) => {
-    const raw = editingCost[symbol];
-    if (raw === undefined) return;
-    const num = parseFloat(raw);
-    const next = { ...costBasis };
-    if (!raw || isNaN(num) || num <= 0) {
-      delete next[symbol];
-    } else {
-      next[symbol] = num;
-    }
-    setCostBasis(next);
-    saveCostBasis(next);
-    setEditingCost((prev) => {
-      const copy = { ...prev };
-      delete copy[symbol];
-      return copy;
+  // --- Trade handlers ---
+  const handleAddTrade = useCallback((symbol: string, trade: Trade) => {
+    setAllTrades((prev) => {
+      const next = { ...prev, [symbol]: [...(prev[symbol] || []), trade] };
+      saveTrades(next);
+      return next;
     });
-  };
+  }, []);
 
-  const getEditValue = (symbol: string): string => {
-    if (symbol in editingCost) return editingCost[symbol];
-    if (costBasis[symbol]) return costBasis[symbol].toString();
-    return '';
-  };
+  const handleDeleteTrade = useCallback((symbol: string, tradeId: string) => {
+    setAllTrades((prev) => {
+      const next = { ...prev, [symbol]: (prev[symbol] || []).filter((t) => t.id !== tradeId) };
+      if (next[symbol].length === 0) delete next[symbol];
+      saveTrades(next);
+      return next;
+    });
+  }, []);
 
   if (loading) {
     return (
@@ -365,8 +353,9 @@ function TickerTable({ tickers, loading, tickerOrder, onReorder, onDelete }: Pro
         {sortedTickers.map((t, i) => {
           const isUp = t.change >= 0;
           const isOpen = expanded.has(t.symbol);
-          const basis = costBasis[t.symbol];
-          const plPercent = basis ? ((t.price - basis) / basis) * 100 : null;
+          const symbolTrades = allTrades[t.symbol] || [];
+          const pos = calcPosition(symbolTrades);
+          const plPercent = pos.avgCost > 0 && pos.totalQty > 0 ? ((t.price - pos.avgCost) / pos.avgCost) * 100 : null;
           const plUp = plPercent !== null && plPercent >= 0;
           const isDragging = dragSymbol === t.symbol;
           const isDropTarget = dragSymbol && overSymbol === t.symbol && overSymbol !== dragSymbol;
@@ -597,30 +586,14 @@ function TickerTable({ tickers, loading, tickerOrder, onReorder, onDelete }: Pro
                           </div>
                         )}
 
-                        {/* Cost basis input */}
-                        <div className="flex items-center gap-3 pt-3 border-t border-bg-tertiary/50">
-                          <span className="text-[11px] text-text-dim font-display shrink-0">평균 단가</span>
-                          <div className="relative flex-1 max-w-[140px]">
-                            <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-text-dim font-display">$</span>
-                            <input
-                              type="number"
-                              inputMode="decimal"
-                              step="any"
-                              placeholder="0.00"
-                              value={getEditValue(t.symbol)}
-                              onChange={(e) => handleCostChange(t.symbol, e.target.value)}
-                              onBlur={() => handleCostSave(t.symbol)}
-                              onKeyDown={(e) => { if (e.key === 'Enter') handleCostSave(t.symbol); }}
-                              onClick={(e) => e.stopPropagation()}
-                              className="w-full pl-5 pr-2 py-1.5 rounded-md bg-bg-primary border border-bg-tertiary text-sm font-display text-text-primary placeholder:text-text-dim/50 focus:outline-none focus:border-accent-blue/50 transition-colors"
-                            />
-                          </div>
-                          {plPercent !== null && (
-                            <span className={`text-sm font-display font-bold ${plUp ? 'text-accent-blue' : 'text-accent-red'}`}>
-                              {plUp ? '+' : ''}{formatNumber(plPercent)}%
-                            </span>
-                          )}
-                        </div>
+                        {/* Trade manager */}
+                        <TradeManager
+                          symbol={t.symbol}
+                          currentPrice={t.price}
+                          trades={symbolTrades}
+                          onAddTrade={handleAddTrade}
+                          onDeleteTrade={handleDeleteTrade}
+                        />
                       </div>
                     </div>
                   </div>

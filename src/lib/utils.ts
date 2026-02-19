@@ -1,4 +1,4 @@
-import { SentimentLevel } from './types';
+import { SentimentLevel, Trade } from './types';
 
 export function getSentimentLevel(score: number): SentimentLevel {
   if (score <= 20) return 'extreme-fear';
@@ -114,6 +114,77 @@ export function loadCostBasis(): Record<string, number> {
 export function saveCostBasis(costBasis: Record<string, number>): void {
   if (typeof window === 'undefined') return;
   localStorage.setItem(COST_BASIS_KEY, JSON.stringify(costBasis));
+}
+
+// Trades per symbol — saved per device
+const TRADES_KEY = 'market-pulse-trades';
+
+export function loadTrades(): Record<string, Trade[]> {
+  if (typeof window === 'undefined') return {};
+  try {
+    const saved = localStorage.getItem(TRADES_KEY);
+    if (saved) return JSON.parse(saved);
+  } catch {}
+  // Migration: convert old cost basis to a single buy trade
+  try {
+    const oldBasis = localStorage.getItem(COST_BASIS_KEY);
+    if (oldBasis) {
+      const parsed: Record<string, number> = JSON.parse(oldBasis);
+      const trades: Record<string, Trade[]> = {};
+      for (const [symbol, price] of Object.entries(parsed)) {
+        if (price > 0) {
+          trades[symbol] = [{
+            id: crypto.randomUUID(),
+            type: 'buy',
+            date: new Date().toISOString().slice(0, 10),
+            price,
+            quantity: 1,
+          }];
+        }
+      }
+      if (Object.keys(trades).length > 0) {
+        localStorage.setItem(TRADES_KEY, JSON.stringify(trades));
+        return trades;
+      }
+    }
+  } catch {}
+  return {};
+}
+
+export function saveTrades(trades: Record<string, Trade[]>): void {
+  if (typeof window === 'undefined') return;
+  localStorage.setItem(TRADES_KEY, JSON.stringify(trades));
+}
+
+export function calcPosition(trades: Trade[]): {
+  avgCost: number;
+  totalQty: number;
+  realizedPL: number;
+  investedAmount: number;
+} {
+  let totalQty = 0;
+  let totalCost = 0;
+  let realizedPL = 0;
+
+  // Process trades in date order
+  const sorted = [...trades].sort((a, b) => a.date.localeCompare(b.date) || a.id.localeCompare(b.id));
+
+  for (const trade of sorted) {
+    if (trade.type === 'buy') {
+      totalCost += trade.price * trade.quantity;
+      totalQty += trade.quantity;
+    } else {
+      // sell
+      const avgCost = totalQty > 0 ? totalCost / totalQty : 0;
+      const sellQty = Math.min(trade.quantity, totalQty);
+      realizedPL += (trade.price - avgCost) * sellQty;
+      totalCost -= avgCost * sellQty;
+      totalQty -= sellQty;
+    }
+  }
+
+  const avgCost = totalQty > 0 ? totalCost / totalQty : 0;
+  return { avgCost, totalQty, realizedPL, investedAmount: totalCost };
 }
 
 // Theme persistence
