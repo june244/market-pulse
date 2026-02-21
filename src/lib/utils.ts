@@ -187,6 +187,29 @@ export function calcPosition(trades: Trade[]): {
   return { avgCost, totalQty, realizedPL, investedAmount: totalCost };
 }
 
+// ── Shared math helpers ──
+export function clamp(v: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, v));
+}
+
+// 7-level color scheme shared by MarketThermometer and HeatmapCalendar
+export const SCORE_LEVELS: { max: number; label: string; color: string }[] = [
+  { max: 15, label: '극한', color: '#3366ff' },
+  { max: 30, label: '냉각', color: '#4499ff' },
+  { max: 45, label: '서늘', color: '#00ccaa' },
+  { max: 55, label: '적정', color: '#88cc44' },
+  { max: 70, label: '온기', color: '#ffaa00' },
+  { max: 85, label: '과열', color: '#ff6644' },
+  { max: 100, label: '극과열', color: '#ff3366' },
+];
+
+export function getScoreLevel(score: number): { label: string; color: string } {
+  for (const l of SCORE_LEVELS) {
+    if (score <= l.max) return l;
+  }
+  return SCORE_LEVELS[SCORE_LEVELS.length - 1];
+}
+
 // Theme persistence
 const THEME_KEY = 'market-pulse-theme';
 export type Theme = 'dark' | 'light' | 'oled' | 'bloomberg';

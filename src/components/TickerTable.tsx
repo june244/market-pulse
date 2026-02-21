@@ -10,7 +10,7 @@ const SWIPE_THRESHOLD = 80;
 const SWIPE_LOCK_THRESHOLD = 10;
 
 // --- Sparkline SVG ---
-function Sparkline({ data, width = 80, height = 28 }: { data: number[]; width?: number; height?: number }) {
+const Sparkline = React.memo(function Sparkline({ data, width = 80, height = 28 }: { data: number[]; width?: number; height?: number }) {
   if (data.length < 2) return null;
 
   const min = Math.min(...data);
@@ -44,7 +44,7 @@ function Sparkline({ data, width = 80, height = 28 }: { data: number[]; width?: 
       <circle cx={parseFloat(lastPt[0])} cy={parseFloat(lastPt[1])} r={2} fill={color} />
     </svg>
   );
-}
+});
 
 // --- Day Range Bar ---
 function DayRangeBar({ low, high, current }: { low: number; high: number; current: number }) {
@@ -143,6 +143,35 @@ function TickerTable({ tickers, loading, tickerOrder, onReorder, onDelete }: Pro
         return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi);
       })
     : tickers, [tickers, tickerOrder]);
+
+  // Aggregate portfolio summary across all symbols that have trades
+  const portfolioSummary = useMemo(() => {
+    let totalInvested = 0;
+    let totalUnrealized = 0;
+    let totalRealized = 0;
+    let hasAny = false;
+
+    for (const t of sortedTickers) {
+      const trades = allTrades[t.symbol];
+      if (!trades || trades.length === 0) continue;
+      const { avgCost, totalQty, realizedPL, investedAmount } = calcPosition(trades);
+      if (totalQty > 0) {
+        hasAny = true;
+        totalInvested += investedAmount;
+        totalUnrealized += (t.price - avgCost) * totalQty;
+      }
+      if (realizedPL !== 0) {
+        hasAny = true;
+        totalRealized += realizedPL;
+      }
+    }
+
+    if (!hasAny) return null;
+
+    const totalPL = totalUnrealized + totalRealized;
+    const returnPct = totalInvested > 0 ? (totalPL / totalInvested) * 100 : 0;
+    return { totalInvested, totalUnrealized, totalRealized, totalPL, returnPct };
+  }, [allTrades, sortedTickers]);
 
   const toggle = (symbol: string) => {
     if (dragSymbol) return;
@@ -328,7 +357,7 @@ function TickerTable({ tickers, loading, tickerOrder, onReorder, onDelete }: Pro
 
   return (
     <div data-no-swipe className="bg-bg-secondary rounded-2xl p-6 card-hover opacity-0 animate-fade-in stagger-2">
-      <div className="flex items-center justify-between mb-5">
+      <div className="flex items-center justify-between mb-4">
         <h2 className="font-display text-sm font-medium tracking-wider text-text-secondary uppercase">
           Watchlist
         </h2>
@@ -343,6 +372,30 @@ function TickerTable({ tickers, loading, tickerOrder, onReorder, onDelete }: Pro
           )}
         </span>
       </div>
+
+      {/* Portfolio summary */}
+      {portfolioSummary && (
+        <div className="mb-4 rounded-xl bg-bg-tertiary/40 px-4 py-3 flex items-center gap-4">
+          <div className="flex-1 min-w-0">
+            <span className="text-[10px] text-text-dim font-display block mb-0.5">투자원금</span>
+            <span className="text-sm font-display font-semibold text-text-primary">
+              ${formatNumber(portfolioSummary.totalInvested)}
+            </span>
+          </div>
+          <div className="flex-1 min-w-0">
+            <span className="text-[10px] text-text-dim font-display block mb-0.5">평가손익</span>
+            <span className={`text-sm font-display font-bold ${portfolioSummary.totalPL >= 0 ? 'text-accent-blue' : 'text-accent-red'}`}>
+              {portfolioSummary.totalPL >= 0 ? '+' : ''}{formatNumber(portfolioSummary.totalPL)}$
+            </span>
+          </div>
+          <div className="text-right shrink-0">
+            <span className="text-[10px] text-text-dim font-display block mb-0.5">전체 수익률</span>
+            <span className={`text-xl font-display font-bold ${portfolioSummary.returnPct >= 0 ? 'text-accent-blue' : 'text-accent-red'}`}>
+              {portfolioSummary.returnPct >= 0 ? '+' : ''}{formatNumber(portfolioSummary.returnPct)}%
+            </span>
+          </div>
+        </div>
+      )}
 
       <div
         className="space-y-1.5"

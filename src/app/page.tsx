@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import dynamic from 'next/dynamic';
-import { MarketData } from '@/lib/types';
+import { MarketData, TickerData, MacroItem } from '@/lib/types';
 import { DEFAULT_TICKERS, loadTickers, saveTickers, formatTimestamp, loadTheme, saveTheme, loadCostBasis, Theme } from '@/lib/utils';
 import FearGreedGauge from '@/components/FearGreedGauge';
 import VIXCard from '@/components/VIXCard';
@@ -57,6 +57,11 @@ const HeatmapCalendar = dynamic(() => import('@/components/HeatmapCalendar'), {
 type Tab = 'dashboard' | 'coin' | 'watchlist' | 'calendar';
 const TABS: Tab[] = ['dashboard', 'coin', 'watchlist', 'calendar'];
 const REFRESH_INTERVAL = 60_000; // 1 minute
+
+// Stable empty fallbacks — prevent React.memo'd children from re-rendering
+// when data is null (e.g. initial load) and an unrelated state update fires.
+const EMPTY_TICKERS: TickerData[] = [];
+const EMPTY_MACRO: MacroItem[] = [];
 
 export default function Home() {
   const [data, setData] = useState<MarketData | null>(null);
@@ -132,7 +137,7 @@ export default function Home() {
     }
   }, []);
 
-  const handleThemeChange = (newTheme: Theme) => {
+  const handleThemeChange = useCallback((newTheme: Theme) => {
     setTheme(newTheme);
     saveTheme(newTheme);
     if (newTheme === 'dark') {
@@ -140,17 +145,28 @@ export default function Home() {
     } else {
       document.documentElement.dataset.theme = newTheme;
     }
-  };
+  }, []);
 
-  const handleTickerUpdate = (newTickers: string[]) => {
+  const handleTickerUpdate = useCallback((newTickers: string[]) => {
     setTickers(newTickers);
     saveTickers(newTickers);
-  };
+  }, []);
 
-  const handleDeleteTicker = (symbol: string) => {
-    const newTickers = tickers.filter((t) => t !== symbol);
-    handleTickerUpdate(newTickers);
-  };
+  // Functional setState avoids depending on handleTickerUpdate reference
+  const handleDeleteTicker = useCallback((symbol: string) => {
+    setTickers((prev) => {
+      const next = prev.filter((t) => t !== symbol);
+      saveTickers(next);
+      return next;
+    });
+  }, []);
+
+  // Stable derived slices — prevent React.memo children from re-rendering
+  // when an unrelated state change (tab switch, toast, etc.) triggers a page re-render.
+  const fearGreedData = useMemo(() => data?.fearGreed ?? null, [data]);
+  const vixData = useMemo(() => data?.vix ?? null, [data]);
+  const macroData = useMemo(() => data?.macro ?? EMPTY_MACRO, [data]);
+  const tickersData = useMemo(() => data?.tickers ?? EMPTY_TICKERS, [data]);
 
   // ── Shake to refresh (mobile) ──
   useEffect(() => {
@@ -404,13 +420,13 @@ export default function Home() {
           {/* Tab 0: Dashboard */}
           <div className="w-full flex-shrink-0 px-4">
             <div className="grid grid-cols-2 gap-3 mb-4">
-              <FearGreedGauge data={data?.fearGreed ?? null} loading={loading} />
-              <VIXCard data={data?.vix ?? null} loading={loading} />
+              <FearGreedGauge data={fearGreedData} loading={loading} />
+              <VIXCard data={vixData} loading={loading} />
             </div>
             <div className="my-4">
-              <MarketThermometer fearGreed={data?.fearGreed ?? null} vix={data?.vix ?? null} macro={data?.macro ?? []} loading={loading} />
+              <MarketThermometer fearGreed={fearGreedData} vix={vixData} macro={macroData} loading={loading} />
             </div>
-            <MacroDashboard macro={data?.macro ?? []} loading={loading} />
+            <MacroDashboard macro={macroData} loading={loading} />
           </div>
           {/* Tab 1: Coin */}
           <div className="w-full flex-shrink-0 px-4">
@@ -418,7 +434,7 @@ export default function Home() {
           </div>
           {/* Tab 2: Watchlist */}
           <div className="w-full flex-shrink-0 px-4">
-            <TickerTable tickers={data?.tickers ?? []} loading={loading} tickerOrder={tickers} onReorder={handleTickerUpdate} onDelete={handleDeleteTicker} />
+            <TickerTable tickers={tickersData} loading={loading} tickerOrder={tickers} onReorder={handleTickerUpdate} onDelete={handleDeleteTicker} />
           </div>
           {/* Tab 3: Calendar */}
           <div className="w-full flex-shrink-0 px-4">
@@ -430,14 +446,14 @@ export default function Home() {
       {/* ── Desktop: all content visible (no tabs) ── */}
       <div className="hidden md:block">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-          <FearGreedGauge data={data?.fearGreed ?? null} loading={loading} />
-          <VIXCard data={data?.vix ?? null} loading={loading} />
+          <FearGreedGauge data={fearGreedData} loading={loading} />
+          <VIXCard data={vixData} loading={loading} />
         </div>
-        <MarketThermometer fearGreed={data?.fearGreed ?? null} vix={data?.vix ?? null} macro={data?.macro ?? []} loading={loading} />
-        <MacroDashboard macro={data?.macro ?? []} loading={loading} />
+        <MarketThermometer fearGreed={fearGreedData} vix={vixData} macro={macroData} loading={loading} />
+        <MacroDashboard macro={macroData} loading={loading} />
         <CoinTab refreshKey={refreshKey} />
         <div className="mt-4">
-          <TickerTable tickers={data?.tickers ?? []} loading={loading} tickerOrder={tickers} onReorder={handleTickerUpdate} onDelete={handleDeleteTicker} />
+          <TickerTable tickers={tickersData} loading={loading} tickerOrder={tickers} onReorder={handleTickerUpdate} onDelete={handleDeleteTicker} />
         </div>
         <div className="mt-4">
           <HeatmapCalendar />
@@ -460,7 +476,7 @@ export default function Home() {
       {/* Portfolio Roast modal */}
       {roastOpen && (
         <PortfolioRoast
-          tickers={data?.tickers ?? []}
+          tickers={tickersData}
           costBasis={roastCostBasis}
           onClose={() => setRoastOpen(false)}
         />

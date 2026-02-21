@@ -2,6 +2,7 @@
 
 import React, { useMemo } from 'react';
 import { FearGreedData, VIXData, MacroItem } from '@/lib/types';
+import { clamp, getScoreLevel } from '@/lib/utils';
 
 interface Props {
   fearGreed: FearGreedData | null;
@@ -10,32 +11,15 @@ interface Props {
   loading: boolean;
 }
 
-interface TempLevel {
-  label: string;
-  color: string;
-  message: string;
-}
-
-const LEVELS: { max: number; level: TempLevel }[] = [
-  { max: 15, level: { label: '극한', color: '#3366ff', message: '극심한 공포 구간. 시장이 얼어붙었습니다. 역사적으로 저가 매수 기회가 될 수 있습니다.' } },
-  { max: 30, level: { label: '냉각', color: '#4499ff', message: '시장이 위축되어 있습니다. 리스크 회피 심리가 지배적입니다.' } },
-  { max: 45, level: { label: '서늘', color: '#00ccaa', message: '다소 냉각된 시장. 경계심이 있으나 안정적인 구간입니다.' } },
-  { max: 55, level: { label: '적정', color: '#88cc44', message: '시장 온도가 적정 수준입니다. 균형 잡힌 심리 상태입니다.' } },
-  { max: 70, level: { label: '온기', color: '#ffaa00', message: '낙관론이 확산되고 있습니다. 과열 신호에 주의하세요.' } },
-  { max: 85, level: { label: '과열', color: '#ff6644', message: '시장이 과열되고 있습니다. 신규 진입 시 주의가 필요합니다.' } },
-  { max: 100, level: { label: '극과열', color: '#ff3366', message: '극단적 탐욕 구간. 시장이 끓고 있습니다. 리스크 관리에 집중하세요.' } },
-];
-
-function getLevel(score: number): TempLevel {
-  for (const { max, level } of LEVELS) {
-    if (score <= max) return level;
-  }
-  return LEVELS[LEVELS.length - 1].level;
-}
-
-function clamp(v: number, min: number, max: number) {
-  return Math.max(min, Math.min(max, v));
-}
+const LEVEL_MESSAGES: Record<string, string> = {
+  '극한': '극심한 공포 구간. 시장이 얼어붙었습니다. 역사적으로 저가 매수 기회가 될 수 있습니다.',
+  '냉각': '시장이 위축되어 있습니다. 리스크 회피 심리가 지배적입니다.',
+  '서늘': '다소 냉각된 시장. 경계심이 있으나 안정적인 구간입니다.',
+  '적정': '시장 온도가 적정 수준입니다. 균형 잡힌 심리 상태입니다.',
+  '온기': '낙관론이 확산되고 있습니다. 과열 신호에 주의하세요.',
+  '과열': '시장이 과열되고 있습니다. 신규 진입 시 주의가 필요합니다.',
+  '극과열': '극단적 탐욕 구간. 시장이 끓고 있습니다. 리스크 관리에 집중하세요.',
+};
 
 function computeScore(
   fearGreed: FearGreedData | null,
@@ -105,7 +89,7 @@ function MarketThermometer({ fearGreed, vix, macro, loading }: Props) {
   }
 
   const { composite, sub } = result;
-  const level = getLevel(composite);
+  const level = getScoreLevel(composite);
   const mercuryPercent = composite;
 
   // Thermometer SVG dimensions
@@ -227,7 +211,7 @@ function MarketThermometer({ fearGreed, vix, macro, loading }: Props) {
           {/* Sub-indicator pills */}
           <div className="flex flex-wrap gap-1.5 mt-4">
             {sub.map((s) => {
-              const subLevel = getLevel(s.score);
+              const subLevel = getScoreLevel(s.score);
               return (
                 <span
                   key={s.key}
@@ -248,7 +232,7 @@ function MarketThermometer({ fearGreed, vix, macro, loading }: Props) {
       {/* Interpretation */}
       <div className="mt-4 p-3 rounded-lg bg-bg-tertiary/50">
         <p className="text-xs text-text-secondary leading-relaxed">
-          {level.message}
+          {LEVEL_MESSAGES[level.label]}
         </p>
       </div>
     </div>

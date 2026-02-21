@@ -3,24 +3,7 @@
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { DayScore, HistoryResponse } from '@/lib/types';
-
-// Same 7-level color scheme as MarketThermometer
-const LEVELS = [
-  { max: 15, label: '극한', color: '#3366ff' },
-  { max: 30, label: '냉각', color: '#4499ff' },
-  { max: 45, label: '서늘', color: '#00ccaa' },
-  { max: 55, label: '적정', color: '#88cc44' },
-  { max: 70, label: '온기', color: '#ffaa00' },
-  { max: 85, label: '과열', color: '#ff6644' },
-  { max: 100, label: '극과열', color: '#ff3366' },
-];
-
-function getLevel(score: number) {
-  for (const l of LEVELS) {
-    if (score <= l.max) return l;
-  }
-  return LEVELS[LEVELS.length - 1];
-}
+import { SCORE_LEVELS, getScoreLevel } from '@/lib/utils';
 
 const DAY_HEADERS = ['일', '월', '화', '수', '목', '금', '토'];
 
@@ -63,7 +46,7 @@ function groupByMonth(days: DayScore[]): MonthGroup[] {
 
 // Detail modal
 function DayDetail({ day, onClose }: { day: DayScore; onClose: () => void }) {
-  const level = getLevel(day.composite);
+  const level = getScoreLevel(day.composite);
   const dateLabel = new Date(day.date + 'T12:00:00').toLocaleDateString('ko-KR', {
     year: 'numeric',
     month: 'long',
@@ -235,7 +218,7 @@ function HeatmapCalendar() {
           <span className="text-[10px] text-text-dim font-display">최근 3개월</span>
         </div>
         <div className="flex items-center gap-1">
-          {LEVELS.map((l) => (
+          {SCORE_LEVELS.map((l) => (
             <div key={l.label} className="flex-1 flex flex-col items-center gap-1">
               <div
                 className="w-full h-3 rounded-sm"
@@ -285,7 +268,7 @@ function HeatmapCalendar() {
               );
             }
 
-            const level = getLevel(day.composite);
+            const level = getScoreLevel(day.composite);
             return (
               <button
                 key={day.date}
