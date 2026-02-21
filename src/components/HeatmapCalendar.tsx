@@ -131,6 +131,87 @@ function CalendarSkeleton() {
   );
 }
 
+// Composite score history line chart
+function HistoryLineChart({ data }: { data: DayScore[] }) {
+  const days = data.filter((d) => d.marketOpen).slice(-90);
+  if (days.length < 3) return null;
+
+  const W = 400;
+  const H = 80;
+  const padT = 8;
+  const padB = 4;
+  const chartH = H - padT - padB;
+
+  const xScale = (i: number) => (i / (days.length - 1)) * W;
+  const yScale = (v: number) => padT + chartH - (v / 100) * chartH;
+
+  const linePath = days.map((d, i) =>
+    `${i === 0 ? 'M' : 'L'}${xScale(i).toFixed(1)},${yScale(d.composite).toFixed(1)}`
+  ).join(' ');
+  const areaPath = `${linePath} L${W},${H} L0,${H} Z`;
+
+  const lastScore = days[days.length - 1].composite;
+  const lineColor = getScoreLevel(lastScore).color;
+  const labelIdxs = [0, Math.floor((days.length - 1) / 2), days.length - 1];
+
+  return (
+    <div className="bg-bg-secondary rounded-2xl p-4 card-hover">
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="font-display text-sm font-medium text-text-secondary tracking-wider uppercase">
+          시장 온도 추이
+        </h3>
+        <span
+          className="text-xs font-display font-semibold px-2 py-0.5 rounded-full"
+          style={{ backgroundColor: `${lineColor}1a`, color: lineColor }}
+        >
+          현재 {lastScore}°
+        </span>
+      </div>
+      <svg
+        viewBox={`0 0 ${W} ${H}`}
+        width="100%"
+        height="80"
+        preserveAspectRatio="none"
+        className="overflow-visible"
+      >
+        <defs>
+          <linearGradient id="histAreaGrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={lineColor} stopOpacity="0.25" />
+            <stop offset="100%" stopColor={lineColor} stopOpacity="0.02" />
+          </linearGradient>
+        </defs>
+        {/* Neutral 50 reference line */}
+        <line
+          x1={0} y1={yScale(50)} x2={W} y2={yScale(50)}
+          stroke="rgba(255,255,255,0.08)"
+          strokeWidth="1"
+          strokeDasharray="4 4"
+        />
+        <path d={areaPath} fill="url(#histAreaGrad)" />
+        <path d={linePath} fill="none" stroke={lineColor} strokeWidth="1.5" strokeLinejoin="round" />
+        {/* Last point dot */}
+        <circle
+          cx={xScale(days.length - 1)}
+          cy={yScale(lastScore)}
+          r="3"
+          fill={lineColor}
+          style={{ filter: `drop-shadow(0 0 4px ${lineColor})` }}
+        />
+      </svg>
+      <div className="flex justify-between mt-1">
+        {labelIdxs.map((idx, i) => (
+          <span
+            key={days[idx].date}
+            className={`text-[9px] text-text-dim font-display ${i === 1 ? 'flex-1 text-center' : ''}`}
+          >
+            {days[idx].date.slice(5).replace('-', '/')}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // Nav arrow button
 function NavButton({ direction, disabled, onClick }: { direction: 'prev' | 'next'; disabled: boolean; onClick: () => void }) {
   return (
@@ -211,6 +292,9 @@ function HeatmapCalendar() {
 
   return (
     <div className="space-y-4 opacity-0 animate-fade-in">
+      {/* History line chart */}
+      {data && <HistoryLineChart data={data} />}
+
       {/* Legend */}
       <div className="bg-bg-secondary rounded-2xl p-4 card-hover">
         <div className="flex items-center justify-between mb-2">

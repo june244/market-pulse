@@ -8,6 +8,44 @@ import TradeManager from './TradeManager';
 const PERIOD_KEYS = ['1M', '3M', '6M', '1Y'] as const;
 const SWIPE_THRESHOLD = 80;
 const SWIPE_LOCK_THRESHOLD = 10;
+const DONUT_COLORS = ['#00ff87', '#00aaff', '#ffaa00', '#aa55ff', '#ff6644', '#00ccaa', '#ff3366', '#ffcc44'];
+
+// --- Donut chart ---
+const DonutChart = React.memo(function DonutChart({
+  segments,
+}: {
+  segments: { symbol: string; pct: number; color: string }[];
+}) {
+  const r = 27;
+  const cx = 35;
+  const cy = 35;
+  const circ = 2 * Math.PI * r;
+
+  let cumulative = 0;
+  const arcs = segments.map((seg) => {
+    const dash = (seg.pct / 100) * circ;
+    const dashOffset = circ - cumulative;
+    cumulative += dash;
+    return { ...seg, dash, dashOffset };
+  });
+
+  return (
+    <svg width="70" height="70" viewBox="0 0 70 70" className="shrink-0 -rotate-90">
+      <circle cx={cx} cy={cy} r={r} fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="14" />
+      {arcs.map((arc, i) => (
+        <circle
+          key={arc.symbol + i}
+          cx={cx} cy={cy} r={r}
+          fill="none"
+          stroke={arc.color}
+          strokeWidth="14"
+          strokeDasharray={`${arc.dash} ${circ - arc.dash}`}
+          strokeDashoffset={arc.dashOffset}
+        />
+      ))}
+    </svg>
+  );
+});
 
 // --- Sparkline SVG ---
 const Sparkline = React.memo(function Sparkline({ data, width = 80, height = 28 }: { data: number[]; width?: number; height?: number }) {
@@ -144,12 +182,15 @@ function TickerTable({ tickers, loading, tickerOrder, onReorder, onDelete }: Pro
       })
     : tickers, [tickers, tickerOrder]);
 
-  // Aggregate portfolio summary across all symbols that have trades
+  // Aggregate portfolio summary: totals + donut segments + trade stats
   const portfolioSummary = useMemo(() => {
     let totalInvested = 0;
     let totalUnrealized = 0;
     let totalRealized = 0;
     let hasAny = false;
+
+    type SymbolStat = { symbol: string; invested: number; returnPct: number };
+    const symbolStats: SymbolStat[] = [];
 
     for (const t of sortedTickers) {
       const trades = allTrades[t.symbol];
@@ -159,6 +200,8 @@ function TickerTable({ tickers, loading, tickerOrder, onReorder, onDelete }: Pro
         hasAny = true;
         totalInvested += investedAmount;
         totalUnrealized += (t.price - avgCost) * totalQty;
+        const returnPct = avgCost > 0 ? ((t.price - avgCost) / avgCost) * 100 : 0;
+        symbolStats.push({ symbol: t.symbol, invested: investedAmount, returnPct });
       }
       if (realizedPL !== 0) {
         hasAny = true;
@@ -170,7 +213,30 @@ function TickerTable({ tickers, loading, tickerOrder, onReorder, onDelete }: Pro
 
     const totalPL = totalUnrealized + totalRealized;
     const returnPct = totalInvested > 0 ? (totalPL / totalInvested) * 100 : 0;
-    return { totalInvested, totalUnrealized, totalRealized, totalPL, returnPct };
+
+    // Donut segments (sorted by invested amount, largest first)
+    const sorted = [...symbolStats].sort((a, b) => b.invested - a.invested);
+    const segments = sorted.map((s, i) => ({
+      symbol: s.symbol,
+      pct: totalInvested > 0 ? (s.invested / totalInvested) * 100 : 0,
+      color: DONUT_COLORS[i % DONUT_COLORS.length],
+      returnPct: s.returnPct,
+    }));
+
+    // Win rate + best/worst (only among active positions)
+    const wins = symbolStats.filter((s) => s.returnPct > 0).length;
+    const winRate = symbolStats.length > 0 ? (wins / symbolStats.length) * 100 : 0;
+    const best = symbolStats.length > 0
+      ? symbolStats.reduce((b, s) => s.returnPct > b.returnPct ? s : b)
+      : null;
+    const worst = symbolStats.length > 0
+      ? symbolStats.reduce((w, s) => s.returnPct < w.returnPct ? s : w)
+      : null;
+
+    return {
+      totalInvested, totalUnrealized, totalRealized, totalPL, returnPct,
+      segments, wins, total: symbolStats.length, winRate, best, worst,
+    };
   }, [allTrades, sortedTickers]);
 
   const toggle = (symbol: string) => {
@@ -375,25 +441,74 @@ function TickerTable({ tickers, loading, tickerOrder, onReorder, onDelete }: Pro
 
       {/* Portfolio summary */}
       {portfolioSummary && (
-        <div className="mb-4 rounded-xl bg-bg-tertiary/40 px-4 py-3 flex items-center gap-4">
-          <div className="flex-1 min-w-0">
-            <span className="text-[10px] text-text-dim font-display block mb-0.5">투자원금</span>
-            <span className="text-sm font-display font-semibold text-text-primary">
-              ${formatNumber(portfolioSummary.totalInvested)}
-            </span>
+        <div className="mb-4 rounded-xl bg-bg-tertiary/40 p-3 space-y-2.5">
+          {/* Donut + key numbers */}
+          <div className="flex items-center gap-3">
+            {portfolioSummary.segments.length > 0 && (
+              <DonutChart segments={portfolioSummary.segments} />
+            )}
+            <div className="flex-1 grid grid-cols-2 gap-x-3 gap-y-2">
+              <div>
+                <span className="text-[10px] text-text-dim font-display block mb-0.5">투자원금</span>
+                <span className="text-sm font-display font-semibold text-text-primary">
+                  ${formatNumber(portfolioSummary.totalInvested)}
+                </span>
+              </div>
+              <div className="text-right">
+                <span className="text-[10px] text-text-dim font-display block mb-0.5">전체 수익률</span>
+                <span className={`text-xl font-display font-bold leading-none ${portfolioSummary.returnPct >= 0 ? 'text-accent-blue' : 'text-accent-red'}`}>
+                  {portfolioSummary.returnPct >= 0 ? '+' : ''}{formatNumber(portfolioSummary.returnPct)}%
+                </span>
+              </div>
+              <div>
+                <span className="text-[10px] text-text-dim font-display block mb-0.5">평가손익</span>
+                <span className={`text-sm font-display font-bold ${portfolioSummary.totalPL >= 0 ? 'text-accent-blue' : 'text-accent-red'}`}>
+                  {portfolioSummary.totalPL >= 0 ? '+' : ''}{formatNumber(portfolioSummary.totalPL)}$
+                </span>
+              </div>
+              <div className="text-right">
+                <span className="text-[10px] text-text-dim font-display block mb-0.5">승률</span>
+                <span className="text-sm font-display font-semibold text-text-primary">
+                  {portfolioSummary.wins}/{portfolioSummary.total}
+                  <span className="text-text-dim text-[10px] ml-1">({formatNumber(portfolioSummary.winRate, 0)}%)</span>
+                </span>
+              </div>
+            </div>
           </div>
-          <div className="flex-1 min-w-0">
-            <span className="text-[10px] text-text-dim font-display block mb-0.5">평가손익</span>
-            <span className={`text-sm font-display font-bold ${portfolioSummary.totalPL >= 0 ? 'text-accent-blue' : 'text-accent-red'}`}>
-              {portfolioSummary.totalPL >= 0 ? '+' : ''}{formatNumber(portfolioSummary.totalPL)}$
-            </span>
-          </div>
-          <div className="text-right shrink-0">
-            <span className="text-[10px] text-text-dim font-display block mb-0.5">전체 수익률</span>
-            <span className={`text-xl font-display font-bold ${portfolioSummary.returnPct >= 0 ? 'text-accent-blue' : 'text-accent-red'}`}>
-              {portfolioSummary.returnPct >= 0 ? '+' : ''}{formatNumber(portfolioSummary.returnPct)}%
-            </span>
-          </div>
+
+          {/* Allocation legend */}
+          {portfolioSummary.segments.length > 0 && (
+            <div className="flex flex-wrap gap-x-3 gap-y-1 pt-2 border-t border-bg-tertiary/50">
+              {portfolioSummary.segments.map((seg) => (
+                <span key={seg.symbol} className="flex items-center gap-1 text-[10px] font-display text-text-secondary">
+                  <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: seg.color }} />
+                  {seg.symbol} <span className="text-text-dim">{formatNumber(seg.pct, 0)}%</span>
+                </span>
+              ))}
+            </div>
+          )}
+
+          {/* Best / Worst */}
+          {portfolioSummary.total > 1 && (
+            <div className="flex items-center gap-4 pt-2 border-t border-bg-tertiary/50 text-[11px] font-display">
+              {portfolioSummary.best && (
+                <span>
+                  <span className="text-text-dim">최고 </span>
+                  <span className={`font-semibold ${portfolioSummary.best.returnPct >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
+                    {portfolioSummary.best.symbol} {portfolioSummary.best.returnPct >= 0 ? '+' : ''}{formatNumber(portfolioSummary.best.returnPct)}%
+                  </span>
+                </span>
+              )}
+              {portfolioSummary.worst && portfolioSummary.worst.symbol !== portfolioSummary.best?.symbol && (
+                <span>
+                  <span className="text-text-dim">최악 </span>
+                  <span className={`font-semibold ${portfolioSummary.worst.returnPct >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
+                    {portfolioSummary.worst.symbol} {portfolioSummary.worst.returnPct >= 0 ? '+' : ''}{formatNumber(portfolioSummary.worst.returnPct)}%
+                  </span>
+                </span>
+              )}
+            </div>
+          )}
         </div>
       )}
 
