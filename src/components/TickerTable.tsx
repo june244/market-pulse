@@ -684,8 +684,8 @@ function TickerTable({ tickers, loading, tickerOrder, onReorder, onDelete }: Pro
 
                     {/* Expanded detail panel */}
                     <div
-                      className={`overflow-hidden transition-all duration-200 ease-out ${
-                        isOpen ? 'max-h-[500px] opacity-100' : 'max-h-0 opacity-0'
+                      className={`transition-all duration-200 ease-out ${
+                        isOpen ? 'max-h-[1200px] opacity-100 overflow-y-auto' : 'max-h-0 opacity-0 overflow-hidden'
                       }`}
                     >
                       <div className="px-3 pb-4 pt-1 space-y-3">
