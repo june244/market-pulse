@@ -256,7 +256,7 @@ function CoinTab({ refreshKey }: CoinTabProps) {
     async function load() {
       try {
         setLoading(true);
-        const res = await fetch('/api/coin');
+        const res = await fetch('/api/coin', { cache: 'no-store' });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const json = await res.json();
         if (!cancelled) setCoins(json.coins ?? []);

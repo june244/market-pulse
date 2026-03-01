@@ -35,7 +35,7 @@ async function fetchCoinData(symbol: string, label: string): Promise<CoinData | 
       `https://query2.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?range=1y&interval=1d`,
       {
         headers: { 'User-Agent': YAHOO_UA },
-        next: { revalidate: 300 },
+        next: { revalidate: 30 },
       }
     );
     if (!res.ok) return null;
