@@ -5,8 +5,9 @@ import { getSnapshots, backfillIfMissing } from '@/lib/historyStore';
 const YAHOO_UA =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
 
-// ── In-memory flag: only backfill from external APIs once per process ──
-let backfilled = false;
+// ── Backfill from external APIs at most once per hour ──
+let lastBackfillTime = 0;
+const BACKFILL_INTERVAL_MS = 60 * 60 * 1000; // 1 hour
 
 function toETDate(ts: number): string {
   return new Date(ts * 1000).toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
@@ -20,7 +21,7 @@ async function fetchYahooChart(symbol: string): Promise<{ dates: string[]; close
   const url = `https://query2.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?range=3mo&interval=1d`;
   const res = await fetch(url, {
     headers: { 'User-Agent': YAHOO_UA },
-    next: { revalidate: 3600 },
+    cache: 'no-store',
   });
   if (!res.ok) return { dates: [], closes: [] };
   const data = await res.json();
@@ -49,7 +50,7 @@ async function fetchFearGreedHistory(): Promise<Map<string, number>> {
         'User-Agent': YAHOO_UA,
         Accept: 'application/json',
       },
-      next: { revalidate: 3600 },
+      cache: 'no-store',
     });
     if (!res.ok) return map;
     const data = await res.json();
@@ -104,8 +105,9 @@ function computeComposite(
 
 /** Fetch external APIs once and backfill the shared store for past dates */
 async function backfillFromAPIs() {
-  if (backfilled) return;
-  backfilled = true;
+  const now = Date.now();
+  if (now - lastBackfillTime < BACKFILL_INTERVAL_MS) return;
+  lastBackfillTime = now;
 
   try {
     const [fgMap, vixData, tnxData, dxyData] = await Promise.all([
@@ -152,7 +154,7 @@ async function backfillFromAPIs() {
   } catch (e) {
     console.error('History backfill error:', e);
     // Allow retry on next request
-    backfilled = false;
+    lastBackfillTime = 0;
   }
 }
 
@@ -202,7 +204,7 @@ export async function GET() {
     };
 
     return NextResponse.json(response, {
-      headers: { 'Cache-Control': 's-maxage=3600, stale-while-revalidate=7200' },
+      headers: { 'Cache-Control': 'no-cache, no-store, must-revalidate' },
     });
   } catch (e: any) {
     console.error('History API error:', e);

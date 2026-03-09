@@ -76,9 +76,13 @@ export function getSnapshots(): Map<string, DayScore> {
   return store;
 }
 
-/** Merge external API data into store (only fills missing dates) */
+/** Merge external API data into store (fills missing dates, updates non-live entries) */
 export function backfillIfMissing(date: string, day: DayScore): void {
-  if (!store.has(date)) {
+  const existing = store.get(date);
+  if (!existing) {
+    store.set(date, day);
+  } else if (!existing.marketOpen && day.marketOpen) {
+    // Overwrite placeholder closed-day entry with real market data
     store.set(date, day);
   }
 }

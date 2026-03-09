@@ -240,7 +240,7 @@ function HeatmapCalendar() {
     let cancelled = false;
     async function load() {
       try {
-        const res = await fetch('/api/history');
+        const res = await fetch('/api/history', { cache: 'no-store' });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const json: HistoryResponse = await res.json();
         if (!cancelled) {
