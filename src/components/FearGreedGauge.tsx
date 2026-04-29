@@ -3,14 +3,95 @@
 import React from 'react';
 import { FearGreedData } from '@/lib/types';
 import { getSentimentLevel, getSentimentLabel, getSentimentLabelKR, getSentimentColor } from '@/lib/utils';
+import { useTheme, isNordic } from '@/hooks/useTheme';
 
 interface Props {
   data: FearGreedData | null;
   loading: boolean;
 }
 
+function FearGreedGaugeNordic({ data }: { data: FearGreedData }) {
+  const level = getSentimentLevel(data.score);
+  const labelEN = getSentimentLabel(level);
+
+  return (
+    <div style={{ borderBottom: '1px solid var(--text-primary)', paddingBottom: '0' }}>
+      {/* Hero metric */}
+      <div style={{ padding: '14px 0 16px', borderBottom: '1px solid var(--text-primary)' }}>
+        <div style={{
+          fontFamily: 'JetBrains Mono, monospace',
+          fontSize: '9px',
+          letterSpacing: '0.22em',
+          textTransform: 'uppercase',
+          color: 'var(--text-secondary)',
+          marginBottom: '6px',
+        }}>
+          Fear &amp; Greed Index
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
+          <div>
+            <span style={{ fontSize: '66px', fontWeight: 300, letterSpacing: '-0.04em', lineHeight: 0.88, fontFamily: 'Inter Tight, sans-serif', color: 'var(--text-primary)' }}>
+              {data.score}
+            </span>
+            <sup style={{ fontSize: '20px', color: 'var(--text-secondary)', fontWeight: 400, fontFamily: 'Inter Tight, sans-serif' }}>/100</sup>
+          </div>
+          <div style={{
+            textAlign: 'right',
+            fontFamily: 'JetBrains Mono, monospace',
+            fontSize: '10px',
+            lineHeight: 1.55,
+            color: 'var(--text-secondary)',
+          }}>
+            <b style={{ display: 'block', fontSize: '11px', letterSpacing: '0.1em', color: 'var(--accent-amber)', fontWeight: 500 }}>
+              {labelEN.toUpperCase()}
+            </b>
+            <span style={{ color: 'var(--text-secondary)' }}>{getSentimentLabelKR(level)}</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Linear scale track */}
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        padding: '8px 0',
+        fontFamily: 'JetBrains Mono, monospace',
+        fontSize: '9px',
+        letterSpacing: '0.18em',
+        textTransform: 'uppercase',
+        color: 'var(--text-secondary)',
+        gap: '10px',
+      }}>
+        <span>0</span>
+        <div style={{ flex: 1, height: '1px', background: 'var(--text-primary)', position: 'relative' }}>
+          <div style={{
+            position: 'absolute',
+            top: '-5px',
+            bottom: '-5px',
+            width: '1px',
+            background: 'var(--accent-amber)',
+            left: `${data.score}%`,
+          }} />
+        </div>
+        <span>100</span>
+      </div>
+    </div>
+  );
+}
+
 function FearGreedGauge({ data, loading }: Props) {
+  const theme = useTheme();
+  const nordic = isNordic(theme);
+
   if (loading || !data) {
+    if (nordic) {
+      return (
+        <div style={{ borderBottom: '1px solid var(--text-primary)', padding: '14px 0 16px' }}>
+          <div style={{ height: '9px', width: '120px', background: 'var(--bg-tertiary)', marginBottom: '12px' }} />
+          <div style={{ height: '66px', width: '80px', background: 'var(--bg-tertiary)' }} />
+        </div>
+      );
+    }
     return (
       <div className="bg-bg-secondary rounded-2xl p-4 sm:p-6 card-hover animate-pulse">
         <div className="h-6 w-40 bg-bg-tertiary rounded mb-6" />
@@ -21,18 +102,21 @@ function FearGreedGauge({ data, loading }: Props) {
     );
   }
 
+  if (nordic) {
+    return <FearGreedGaugeNordic data={data} />;
+  }
+
   const level = getSentimentLevel(data.score);
   const color = getSentimentColor(level);
   const labelEN = getSentimentLabel(level);
   const labelKR = getSentimentLabelKR(level);
 
-  // SVG gauge: 270 degree arc
   const radius = 80;
   const cx = 100;
   const cy = 100;
   const startAngle = -225;
   const endAngle = 45;
-  const totalAngle = endAngle - startAngle; // 270
+  const totalAngle = endAngle - startAngle;
   const scoreAngle = startAngle + (data.score / 100) * totalAngle;
 
   const polarToCartesian = (angle: number) => {
@@ -68,7 +152,7 @@ function FearGreedGauge({ data, loading }: Props) {
           <path
             d={describeArc(startAngle, endAngle)}
             fill="none"
-            stroke="#1a1a28"
+            stroke="var(--bg-tertiary)"
             strokeWidth="14"
             strokeLinecap="round"
           />
@@ -99,11 +183,11 @@ function FearGreedGauge({ data, loading }: Props) {
           <text x={cx} y={cy - 6} textAnchor="middle" fill={color} fontSize="36" fontFamily="JetBrains Mono, monospace" fontWeight="700">
             {data.score}
           </text>
-          <text x={cx} y={cy + 16} textAnchor="middle" fill="#8888a0" fontSize="12" fontFamily="IBM Plex Sans, sans-serif">
+          <text x={cx} y={cy + 16} textAnchor="middle" fill="var(--text-secondary)" fontSize="12" fontFamily="IBM Plex Sans, sans-serif">
             {labelKR}
           </text>
-          <text x="18" y="130" fill="#555570" fontSize="9" fontFamily="JetBrains Mono">0</text>
-          <text x="172" y="130" fill="#555570" fontSize="9" fontFamily="JetBrains Mono">100</text>
+          <text x="18" y="130" fill="var(--text-dim)" fontSize="9" fontFamily="JetBrains Mono">0</text>
+          <text x="172" y="130" fill="var(--text-dim)" fontSize="9" fontFamily="JetBrains Mono">100</text>
         </svg>
       </div>
     </div>

@@ -3,6 +3,7 @@
 import React, { useMemo } from 'react';
 import { FearGreedData, VIXData, MacroItem } from '@/lib/types';
 import { clamp, getScoreLevel } from '@/lib/utils';
+import { useTheme, isNordic } from '@/hooks/useTheme';
 
 interface Props {
   fearGreed: FearGreedData | null;
@@ -33,21 +34,18 @@ function computeScore(
   }
 
   if (vix) {
-    // Inverse: low VIX = hot
     const normalized = 100 - (clamp(vix.value, 10, 40) - 10) / 30 * 100;
     entries.push({ weight: 30, score: Math.round(normalized), label: 'VIX', key: 'vix' });
   }
 
   const tnx = macro.find((m) => m.symbol === '^TNX');
   if (tnx) {
-    // Inverse of daily change%: rising yield = cooling
     const normalized = 50 - (clamp(tnx.changePercent, -3, 3) / 3) * 50;
     entries.push({ weight: 15, score: Math.round(normalized), label: 'TNX', key: 'tnx' });
   }
 
   const dxy = macro.find((m) => m.symbol === 'DX-Y.NYB');
   if (dxy) {
-    // Inverse of daily change%: rising dollar = cooling
     const normalized = 50 - (clamp(dxy.changePercent, -2, 2) / 2) * 50;
     entries.push({ weight: 15, score: Math.round(normalized), label: 'DXY', key: 'dxy' });
   }
@@ -65,10 +63,118 @@ function computeScore(
   };
 }
 
+function MarketThermometerNordic({
+  result,
+}: {
+  result: { composite: number; sub: { label: string; key: string; score: number }[] };
+}) {
+  const { composite, sub } = result;
+  const level = getScoreLevel(composite);
+  const filledCells = Math.round(composite / 5); // 20 cells total (0-100 / 5)
+
+  return (
+    <div style={{ padding: '10px 0', borderBottom: '1px solid var(--text-primary)' }}>
+      <div style={{
+        fontFamily: 'JetBrains Mono, monospace',
+        fontSize: '9px',
+        letterSpacing: '0.22em',
+        textTransform: 'uppercase',
+        color: 'var(--text-secondary)',
+        marginBottom: '8px',
+      }}>
+        Market Temperature
+      </div>
+
+      {/* Score row */}
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px', marginBottom: '8px' }}>
+        <span style={{
+          fontSize: '38px',
+          fontWeight: 300,
+          letterSpacing: '-0.03em',
+          lineHeight: 0.9,
+          fontFamily: 'Inter Tight, sans-serif',
+          color: 'var(--accent-amber)',
+        }}>
+          {composite}
+        </span>
+        <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '10px', color: 'var(--text-secondary)' }}>° / 100</span>
+        <span style={{
+          marginLeft: 'auto',
+          fontFamily: 'JetBrains Mono, monospace',
+          fontSize: '9px',
+          color: 'var(--accent-amber)',
+          letterSpacing: '0.18em',
+          textTransform: 'uppercase',
+        }}>
+          {level.label}
+        </span>
+      </div>
+
+      {/* 20-cell segmented meter */}
+      <div style={{
+        height: '8px',
+        border: '1px solid var(--text-primary)',
+        display: 'flex',
+      }}>
+        {Array.from({ length: 20 }).map((_, i) => (
+          <div
+            key={i}
+            style={{
+              flex: 1,
+              borderRight: i < 19 ? '1px solid var(--bg-tertiary)' : undefined,
+              background: i < filledCells ? 'var(--text-primary)' : 'transparent',
+            }}
+          />
+        ))}
+      </div>
+      <div style={{
+        display: 'flex',
+        justifyContent: 'space-between',
+        fontFamily: 'JetBrains Mono, monospace',
+        fontSize: '8px',
+        color: 'var(--text-secondary)',
+        marginTop: '4px',
+      }}>
+        <span>0 · Cold</span>
+        <span>50</span>
+        <span>Hot · 100</span>
+      </div>
+
+      {/* Sub-indicator pills */}
+      <div style={{ display: 'flex', gap: '5px', marginTop: '8px', flexWrap: 'wrap' as const }}>
+        {sub.map((s) => (
+          <span
+            key={s.key}
+            style={{
+              fontFamily: 'JetBrains Mono, monospace',
+              fontSize: '9px',
+              padding: '2px 7px',
+              border: '1px solid var(--bg-tertiary)',
+              color: 'var(--text-secondary)',
+            }}
+          >
+            {s.label} {s.score}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function MarketThermometer({ fearGreed, vix, macro, loading }: Props) {
+  const theme = useTheme();
+  const nordic = isNordic(theme);
   const result = useMemo(() => computeScore(fearGreed, vix, macro), [fearGreed, vix, macro]);
 
   if (loading || !result) {
+    if (nordic) {
+      return (
+        <div style={{ padding: '10px 0', borderBottom: '1px solid var(--text-primary)' }}>
+          <div style={{ height: '9px', width: '120px', background: 'var(--bg-tertiary)', marginBottom: '10px' }} />
+          <div style={{ height: '38px', width: '80px', background: 'var(--bg-tertiary)' }} />
+        </div>
+      );
+    }
     return (
       <div className="bg-bg-secondary rounded-2xl p-6 card-hover animate-pulse">
         <div className="h-5 w-28 bg-bg-tertiary rounded mb-5" />
@@ -88,23 +194,25 @@ function MarketThermometer({ fearGreed, vix, macro, loading }: Props) {
     );
   }
 
+  if (nordic) {
+    return <MarketThermometerNordic result={result} />;
+  }
+
   const { composite, sub } = result;
   const level = getScoreLevel(composite);
   const mercuryPercent = composite;
 
-  // Thermometer SVG dimensions
-  const cx = 30;          // center x of tube & bulb
-  const tubeW = 16;       // tube width
+  const cx = 30;
+  const tubeW = 16;
   const tubeR = tubeW / 2;
   const tubeTop = 12;
   const tubeBot = 130;
   const tubeH = tubeBot - tubeTop;
-  const bulbR = 14;       // bulb radius
-  const bulbCY = tubeBot + bulbR - 2; // overlap slightly with tube
+  const bulbR = 14;
+  const bulbCY = tubeBot + bulbR - 2;
   const mercuryH = (mercuryPercent / 100) * tubeH;
   const mercuryTop = tubeBot - mercuryH;
 
-  // Outer shell path: tube + bulb as one continuous shape
   const outerPath = `
     M ${cx - tubeR} ${tubeTop + tubeR}
     A ${tubeR} ${tubeR} 0 0 1 ${cx + tubeR} ${tubeTop + tubeR}
@@ -117,7 +225,6 @@ function MarketThermometer({ fearGreed, vix, macro, loading }: Props) {
 
   return (
     <div className="bg-bg-secondary rounded-2xl p-6 card-hover opacity-0 animate-fade-in stagger-2">
-      {/* Header */}
       <div className="flex items-center justify-between mb-4">
         <h2 className="font-display text-sm font-medium tracking-wider text-text-secondary uppercase">
           시장 온도계
@@ -130,9 +237,7 @@ function MarketThermometer({ fearGreed, vix, macro, loading }: Props) {
         </span>
       </div>
 
-      {/* Body */}
       <div className="flex gap-5">
-        {/* Thermometer SVG */}
         <div className="flex-shrink-0">
           <svg width="60" height="175" viewBox="0 0 60 175">
             <defs>
@@ -147,11 +252,7 @@ function MarketThermometer({ fearGreed, vix, macro, loading }: Props) {
                 <path d={outerPath} />
               </clipPath>
             </defs>
-
-            {/* Outer shell */}
-            <path d={outerPath} fill="#1a1a28" />
-
-            {/* Mercury: fills from bulb up through tube, clipped to shell */}
+            <path d={outerPath} fill="var(--bg-tertiary)" />
             <rect
               x={cx - bulbR}
               y={mercuryTop}
@@ -164,8 +265,6 @@ function MarketThermometer({ fearGreed, vix, macro, loading }: Props) {
                 filter: `drop-shadow(0 0 4px ${level.color}88)`,
               }}
             />
-
-            {/* Bulb glow overlay */}
             <circle
               cx={cx}
               cy={bulbCY}
@@ -174,14 +273,12 @@ function MarketThermometer({ fearGreed, vix, macro, loading }: Props) {
               opacity="0.4"
               style={{ filter: `drop-shadow(0 0 10px ${level.color})` }}
             />
-
-            {/* Scale ticks */}
             {ticks.map((t) => {
               const y = tubeBot - (t / 100) * tubeH;
               return (
                 <g key={t}>
-                  <line x1={cx + tubeR + 3} y1={y} x2={cx + tubeR + 8} y2={y} stroke="#555570" strokeWidth="1" />
-                  <text x={cx + tubeR + 11} y={y + 3} fill="#555570" fontSize="8" fontFamily="JetBrains Mono, monospace">
+                  <line x1={cx + tubeR + 3} y1={y} x2={cx + tubeR + 8} y2={y} stroke="var(--text-dim)" strokeWidth="1" />
+                  <text x={cx + tubeR + 11} y={y + 3} fill="var(--text-dim)" fontSize="8" fontFamily="JetBrains Mono, monospace">
                     {t}
                   </text>
                 </g>
@@ -190,7 +287,6 @@ function MarketThermometer({ fearGreed, vix, macro, loading }: Props) {
           </svg>
         </div>
 
-        {/* Score + sub-indicators */}
         <div className="flex-1 min-w-0 pt-1">
           <div className="flex items-start gap-0.5">
             <span
@@ -208,7 +304,6 @@ function MarketThermometer({ fearGreed, vix, macro, loading }: Props) {
             {level.label}
           </p>
 
-          {/* Sub-indicator pills */}
           <div className="flex flex-wrap gap-1.5 mt-4">
             {sub.map((s) => {
               const subLevel = getScoreLevel(s.score);
@@ -229,7 +324,6 @@ function MarketThermometer({ fearGreed, vix, macro, loading }: Props) {
         </div>
       </div>
 
-      {/* Interpretation */}
       <div className="mt-4 p-3 rounded-lg bg-bg-tertiary/50">
         <p className="text-xs text-text-secondary leading-relaxed">
           {LEVEL_MESSAGES[level.label]}

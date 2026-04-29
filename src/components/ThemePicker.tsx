@@ -5,6 +5,9 @@ import { Theme } from '@/lib/utils';
 
 const THEMES: { id: Theme; label: string; color: string }[] = [
   { id: 'dark', label: '다크', color: '#0a0a0f' },
+  { id: 'nordic', label: 'Nordic·Dark', color: '#f4efe4' },
+  { id: 'nordic-light', label: 'Nordic·Light', color: '#ebebe6' },
+  { id: 'brutalist', label: 'Brutalist', color: '#ede7d6' },
   { id: 'light', label: '라이트', color: '#f5f5f7' },
   { id: 'oled', label: 'OLED', color: '#000000' },
   { id: 'bloomberg', label: '블룸버그', color: '#ff8c00' },

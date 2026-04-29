@@ -13,6 +13,8 @@
   --text-primary: #e8e8f0;
   --text-secondary: #8888a0;
   --text-dim: #555570;
+  --accent-green-soft: rgba(0,255,135,0.06);
+  --accent-red-soft: rgba(255,51,102,0.06);
 }
 
 [data-theme="light"] {
@@ -40,6 +42,51 @@
   --text-primary: #ff8c00;
   --text-secondary: #c86800;
   --text-dim: #6a4000;
+}
+
+[data-theme="nordic"] {
+  --bg-primary: #17181a;
+  --bg-secondary: #17181a;
+  --bg-tertiary: #2e2f32;
+  --text-primary: #f4efe4;
+  --text-secondary: #8f8b80;
+  --text-dim: #6a6a66;
+  --accent-green: #7bd48a;
+  --accent-red: #ff7a6a;
+  --accent-amber: #e9c46a;
+  --accent-blue: #00aaff;
+  --accent-green-soft: rgba(123,212,138,0.08);
+  --accent-red-soft: rgba(255,122,106,0.08);
+}
+
+[data-theme="nordic-light"] {
+  --bg-primary: #ebebe6;
+  --bg-secondary: #ebebe6;
+  --bg-tertiary: #c4c0b8;
+  --text-primary: #0a0a0a;
+  --text-secondary: #5a5a58;
+  --text-dim: #8a8a86;
+  --accent-green: #1a5f2e;
+  --accent-red: #8a1a1a;
+  --accent-amber: #7a5a10;
+  --accent-blue: #1a4a8a;
+  --accent-green-soft: rgba(26,95,46,0.08);
+  --accent-red-soft: rgba(138,26,26,0.08);
+}
+
+[data-theme="brutalist"] {
+  --bg-primary: #161412;
+  --bg-secondary: #161412;
+  --bg-tertiary: #2e2a25;
+  --text-primary: #ede7d6;
+  --text-secondary: #7a7468;
+  --text-dim: #6a5f52;
+  --accent-green: #8bc97a;
+  --accent-red: #e07563;
+  --accent-amber: #e9a94a;
+  --accent-blue: #00aaff;
+  --accent-green-soft: rgba(139,201,122,0.1);
+  --accent-red-soft: rgba(224,117,99,0.1);
 }
 
 * {
@@ -189,4 +236,99 @@ body {
 }
 .scrollbar-hide::-webkit-scrollbar {
   display: none;
+}
+
+/* ════════════════════════════════════════════════════════════════
+   THEME-SPECIFIC OVERRIDES: Nordic & Brutalist
+   ════════════════════════════════════════════════════════════════ */
+
+/* ──── NORDIC (dark + light): Minimal hairline borders, transparent backgrounds ──── */
+[data-theme="nordic"] .card-hover,
+[data-theme="nordic-light"] .card-hover {
+  background: transparent !important;
+  border-radius: 0 !important;
+  border: none;
+  border-top: 1px solid var(--text-primary);
+  box-shadow: none !important;
+  padding-left: 0;
+  padding-right: 0;
+}
+[data-theme="nordic"] .card-hover:hover,
+[data-theme="nordic-light"] .card-hover:hover {
+  transform: none;
+  box-shadow: none !important;
+}
+[data-theme="nordic"] .bg-bg-secondary,
+[data-theme="nordic-light"] .bg-bg-secondary {
+  background-color: transparent;
+}
+[data-theme="nordic"] .bg-bg-tertiary\/40,
+[data-theme="nordic"] .bg-bg-tertiary\/50,
+[data-theme="nordic-light"] .bg-bg-tertiary\/40,
+[data-theme="nordic-light"] .bg-bg-tertiary\/50 {
+  background-color: transparent;
+}
+[data-theme="nordic"] .border-bg-tertiary\/50,
+[data-theme="nordic-light"] .border-bg-tertiary\/50 {
+  border-color: var(--bg-tertiary);
+}
+[data-theme="nordic"] .rounded-2xl,
+[data-theme="nordic"] .rounded-xl,
+[data-theme="nordic"] .rounded-lg,
+[data-theme="nordic"] .rounded-full,
+[data-theme="nordic-light"] .rounded-2xl,
+[data-theme="nordic-light"] .rounded-xl,
+[data-theme="nordic-light"] .rounded-lg,
+[data-theme="nordic-light"] .rounded-full {
+  border-radius: 0;
+}
+/* Glow effects off in Nordic */
+[data-theme="nordic"] .glow-green,
+[data-theme="nordic"] .glow-red,
+[data-theme="nordic"] .glow-amber,
+[data-theme="nordic"] .glow-blue,
+[data-theme="nordic-light"] .glow-green,
+[data-theme="nordic-light"] .glow-red,
+[data-theme="nordic-light"] .glow-amber,
+[data-theme="nordic-light"] .glow-blue {
+  text-shadow: none;
+}
+/* Large display numbers use Inter Tight in Nordic */
+[data-theme="nordic"] .font-display,
+[data-theme="nordic-light"] .font-display {
+  font-family: var(--font-inter-tight), 'Inter Tight', sans-serif;
+  letter-spacing: -0.02em;
+  font-weight: 300;
+}
+
+/* ──── BRUTALIST: Box borders, monospace, no radius ──── */
+[data-theme="brutalist"] .card-hover {
+  background: transparent !important;
+  border-radius: 0 !important;
+  border: 1.5px solid var(--text-primary) !important;
+  box-shadow: none !important;
+  padding: 10px;
+}
+[data-theme="brutalist"] .card-hover:hover {
+  transform: none;
+  box-shadow: none !important;
+}
+[data-theme="brutalist"] .bg-bg-secondary {
+  background-color: transparent;
+}
+[data-theme="brutalist"] .bg-bg-tertiary\/40,
+[data-theme="brutalist"] .bg-bg-tertiary\/50 {
+  background-color: transparent;
+  border: 1px solid var(--bg-tertiary);
+}
+[data-theme="brutalist"] body {
+  font-family: var(--font-ibm-plex-mono, 'IBM Plex Mono'), monospace;
+}
+[data-theme="brutalist"] .rounded-full {
+  border-radius: 2px;
+}
+[data-theme="brutalist"] .rounded-2xl,
+[data-theme="brutalist"] .rounded-xl,
+[data-theme="brutalist"] .rounded-lg {
+  border-radius: 0;
 }

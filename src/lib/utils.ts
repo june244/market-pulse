@@ -212,13 +212,13 @@ export function getScoreLevel(score: number): { label: string; color: string } {
 
 // Theme persistence
 const THEME_KEY = 'market-pulse-theme';
-export type Theme = 'dark' | 'light' | 'oled' | 'bloomberg';
+export type Theme = 'dark' | 'light' | 'oled' | 'bloomberg' | 'nordic' | 'nordic-light' | 'brutalist';
 
 export function loadTheme(): Theme {
   if (typeof window === 'undefined') return 'dark';
   try {
     const saved = localStorage.getItem(THEME_KEY);
-    if (saved && ['dark', 'light', 'oled', 'bloomberg'].includes(saved)) return saved as Theme;
+    if (saved && ['dark', 'light', 'oled', 'bloomberg', 'nordic', 'nordic-light', 'brutalist'].includes(saved)) return saved as Theme;
   } catch {}
   return 'dark';
 }
