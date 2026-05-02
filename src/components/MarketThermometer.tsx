@@ -69,7 +69,8 @@ function MarketThermometerNordic({
   result: { composite: number; sub: { label: string; key: string; score: number }[] };
 }) {
   const { composite, sub } = result;
-  const level = getScoreLevel(composite);
+  const theme = useTheme();
+  const level = getScoreLevel(composite, theme);
   const filledCells = Math.round(composite / 5); // 20 cells total (0-100 / 5)
 
   return (

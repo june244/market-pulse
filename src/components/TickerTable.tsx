@@ -8,81 +8,102 @@ import TradeManager from './TradeManager';
 const PERIOD_KEYS = ['1M', '3M', '6M', '1Y'] as const;
 const SWIPE_THRESHOLD = 80;
 const SWIPE_LOCK_THRESHOLD = 10;
-const DONUT_COLORS = ['#00ff87', '#00aaff', '#ffaa00', '#aa55ff', '#ff6644', '#00ccaa', '#ff3366', '#ffcc44'];
 
-// --- Donut chart ---
+// Nordic palette: hi / up / dn / soft (Other)
+const NORDIC_DONUT_COLORS = [
+  'var(--accent-amber)',
+  'var(--accent-green)',
+  'var(--accent-red)',
+  'var(--text-secondary)',
+];
+
+// --- Donut chart (Nordic FOLIO style: thin 5-stroke, 36 viewBox, r=14) ---
 const DonutChart = React.memo(function DonutChart({
   segments,
 }: {
   segments: { symbol: string; pct: number; color: string }[];
 }) {
-  const r = 27;
-  const cx = 35;
-  const cy = 35;
-  const circ = 2 * Math.PI * r;
+  const r = 14;
+  const circ = 2 * Math.PI * r; // ≈88
 
   let cumulative = 0;
   const arcs = segments.map((seg) => {
     const dash = (seg.pct / 100) * circ;
-    const dashOffset = circ - cumulative;
+    const node = { ...seg, dash, offset: -cumulative };
     cumulative += dash;
-    return { ...seg, dash, dashOffset };
+    return node;
   });
 
   return (
-    <svg width="70" height="70" viewBox="0 0 70 70" className="shrink-0 -rotate-90">
-      <circle cx={cx} cy={cy} r={r} fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="14" />
+    <svg width="80" height="80" viewBox="0 0 36 36" style={{ flexShrink: 0 }}>
+      <circle cx="18" cy="18" r={r} fill="none" stroke="var(--bg-tertiary)" strokeWidth="5" />
       {arcs.map((arc, i) => (
         <circle
           key={arc.symbol + i}
-          cx={cx} cy={cy} r={r}
+          cx="18" cy="18" r={r}
           fill="none"
           stroke={arc.color}
-          strokeWidth="14"
-          strokeDasharray={`${arc.dash} ${circ - arc.dash}`}
-          strokeDashoffset={arc.dashOffset}
+          strokeWidth="5"
+          strokeDasharray={`${arc.dash} ${circ}`}
+          strokeDashoffset={arc.offset}
+          transform="rotate(-90 18 18)"
         />
       ))}
     </svg>
   );
 });
 
-// --- Sparkline SVG ---
-const Sparkline = React.memo(function Sparkline({ data, width = 80, height = 28 }: { data: number[]; width?: number; height?: number }) {
-  if (data.length < 2) return null;
+function splitDecimal(value: number): { int: string; dec: string } {
+  const fixed = Math.abs(value).toFixed(2);
+  const [intPart, decPart] = fixed.split('.');
+  const formatted = (value < 0 ? '-' : '') + parseInt(intPart, 10).toLocaleString('en-US');
+  return { int: formatted, dec: decPart };
+}
 
-  const min = Math.min(...data);
-  const max = Math.max(...data);
-  const range = max - min || 1;
-  const pad = 2;
-
-  const points = data.map((v, i) => {
-    const x = pad + (i / (data.length - 1)) * (width - pad * 2);
-    const y = height - pad - ((v - min) / range) * (height - pad * 2);
-    return `${x},${y}`;
-  });
-
-  const isUp = data[data.length - 1] >= data[0];
-  const color = isUp ? '#00ff87' : '#ff3366';
-  const lastPt = points[points.length - 1].split(',');
-  const firstX = pad;
-  const lastX = pad + (width - pad * 2);
-  const area = `M${points[0]} ${points.slice(1).map((p) => `L${p}`).join(' ')} L${lastX},${height} L${firstX},${height} Z`;
-
+// --- 2x2 stat cell (Nordic n-stats4) ---
+function StatCell({
+  k, v, color, big, borderRight, borderBottom,
+}: {
+  k: string;
+  v: string;
+  color?: string;
+  big?: boolean;
+  borderRight?: boolean;
+  borderBottom?: boolean;
+}) {
   return (
-    <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} className="overflow-visible">
-      <defs>
-        <linearGradient id={`sg-${isUp ? 'u' : 'd'}`} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor={color} stopOpacity={0.15} />
-          <stop offset="100%" stopColor={color} stopOpacity={0} />
-        </linearGradient>
-      </defs>
-      <path d={area} fill={`url(#sg-${isUp ? 'u' : 'd'})`} />
-      <polyline points={points.join(' ')} fill="none" stroke={color} strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" />
-      <circle cx={parseFloat(lastPt[0])} cy={parseFloat(lastPt[1])} r={2} fill={color} />
-    </svg>
+    <div
+      style={{
+        padding: '10px 16px',
+        borderRight: borderRight ? '1px solid var(--text-primary)' : undefined,
+        borderBottom: borderBottom ? '1px solid var(--bg-tertiary)' : undefined,
+      }}
+    >
+      <div
+        style={{
+          fontFamily: 'JetBrains Mono, monospace',
+          fontSize: '9px',
+          letterSpacing: '0.15em',
+          textTransform: 'uppercase',
+          color: 'var(--text-secondary)',
+          marginBottom: '2px',
+        }}
+      >
+        {k}
+      </div>
+      <div
+        style={{
+          fontSize: big ? '20px' : '15px',
+          fontWeight: 300,
+          letterSpacing: '-0.01em',
+          color: color ?? 'var(--text-primary)',
+        }}
+      >
+        {v}
+      </div>
+    </div>
   );
-});
+}
 
 // --- Day Range Bar ---
 function DayRangeBar({ low, high, current }: { low: number; high: number; current: number }) {
@@ -102,20 +123,6 @@ function DayRangeBar({ low, high, current }: { low: number; high: number; curren
       </div>
       <span className="text-[11px] font-display text-text-dim shrink-0">${formatNumber(high)}</span>
     </div>
-  );
-}
-
-// --- Drag handle icon ---
-function GripIcon() {
-  return (
-    <svg width="10" height="16" viewBox="0 0 10 16" fill="currentColor" className="text-text-dim">
-      <circle cx="2" cy="2" r="1.2" />
-      <circle cx="8" cy="2" r="1.2" />
-      <circle cx="2" cy="8" r="1.2" />
-      <circle cx="8" cy="8" r="1.2" />
-      <circle cx="2" cy="14" r="1.2" />
-      <circle cx="8" cy="14" r="1.2" />
-    </svg>
   );
 }
 
@@ -187,9 +194,11 @@ function TickerTable({ tickers, loading, tickerOrder, onReorder, onDelete }: Pro
     let totalInvested = 0;
     let totalUnrealized = 0;
     let totalRealized = 0;
+    let totalValue = 0;
+    let totalDailyChange = 0;
     let hasAny = false;
 
-    type SymbolStat = { symbol: string; invested: number; returnPct: number };
+    type SymbolStat = { symbol: string; invested: number; currentValue: number; returnPct: number };
     const symbolStats: SymbolStat[] = [];
 
     for (const t of sortedTickers) {
@@ -198,10 +207,13 @@ function TickerTable({ tickers, loading, tickerOrder, onReorder, onDelete }: Pro
       const { avgCost, totalQty, realizedPL, investedAmount } = calcPosition(trades);
       if (totalQty > 0) {
         hasAny = true;
+        const currentValue = t.price * totalQty;
+        totalValue += currentValue;
         totalInvested += investedAmount;
         totalUnrealized += (t.price - avgCost) * totalQty;
+        totalDailyChange += t.change * totalQty;
         const returnPct = avgCost > 0 ? ((t.price - avgCost) / avgCost) * 100 : 0;
-        symbolStats.push({ symbol: t.symbol, invested: investedAmount, returnPct });
+        symbolStats.push({ symbol: t.symbol, invested: investedAmount, currentValue, returnPct });
       }
       if (realizedPL !== 0) {
         hasAny = true;
@@ -213,15 +225,35 @@ function TickerTable({ tickers, loading, tickerOrder, onReorder, onDelete }: Pro
 
     const totalPL = totalUnrealized + totalRealized;
     const returnPct = totalInvested > 0 ? (totalPL / totalInvested) * 100 : 0;
+    const prevValue = totalValue - totalDailyChange;
+    const dailyChangePct = prevValue > 0 ? (totalDailyChange / prevValue) * 100 : 0;
 
-    // Donut segments (sorted by invested amount, largest first)
-    const sorted = [...symbolStats].sort((a, b) => b.invested - a.invested);
-    const segments = sorted.map((s, i) => ({
-      symbol: s.symbol,
-      pct: totalInvested > 0 ? (s.invested / totalInvested) * 100 : 0,
-      color: DONUT_COLORS[i % DONUT_COLORS.length],
-      returnPct: s.returnPct,
-    }));
+    // Donut segments by current value, top-3 + Other (Nordic palette)
+    const byValue = [...symbolStats].sort((a, b) => b.currentValue - a.currentValue);
+    let segments: { symbol: string; pct: number; color: string }[];
+    if (byValue.length <= 4) {
+      segments = byValue.map((s, i) => ({
+        symbol: s.symbol,
+        pct: totalValue > 0 ? (s.currentValue / totalValue) * 100 : 0,
+        color: NORDIC_DONUT_COLORS[i],
+      }));
+    } else {
+      const top = byValue.slice(0, 3);
+      const rest = byValue.slice(3);
+      const restValue = rest.reduce((sum, s) => sum + s.currentValue, 0);
+      segments = [
+        ...top.map((s, i) => ({
+          symbol: s.symbol,
+          pct: totalValue > 0 ? (s.currentValue / totalValue) * 100 : 0,
+          color: NORDIC_DONUT_COLORS[i],
+        })),
+        {
+          symbol: 'Other',
+          pct: totalValue > 0 ? (restValue / totalValue) * 100 : 0,
+          color: NORDIC_DONUT_COLORS[3],
+        },
+      ];
+    }
 
     // Win rate + best/worst (only among active positions)
     const wins = symbolStats.filter((s) => s.returnPct > 0).length;
@@ -234,7 +266,8 @@ function TickerTable({ tickers, loading, tickerOrder, onReorder, onDelete }: Pro
       : null;
 
     return {
-      totalInvested, totalUnrealized, totalRealized, totalPL, returnPct,
+      totalValue, totalInvested, totalUnrealized, totalRealized, totalPL, returnPct,
+      totalDailyChange, dailyChangePct,
       segments, wins, total: symbolStats.length, winRate, best, worst,
     };
   }, [allTrades, sortedTickers]);
@@ -401,10 +434,18 @@ function TickerTable({ tickers, loading, tickerOrder, onReorder, onDelete }: Pro
 
   if (loading) {
     return (
-      <div className="bg-bg-secondary rounded-2xl p-6 card-hover">
-        <div className="h-6 w-40 bg-bg-tertiary rounded mb-4 animate-pulse" />
+      <div className="opacity-0 animate-fade-in" style={{ borderTop: '1px solid var(--text-primary)' }}>
         {[...Array(6)].map((_, i) => (
-          <div key={i} className="h-14 bg-bg-tertiary rounded-lg mb-2 animate-pulse" />
+          <div
+            key={i}
+            className="animate-pulse"
+            style={{
+              height: '44px',
+              borderBottom: '1px solid var(--bg-tertiary)',
+              background: 'var(--bg-tertiary)',
+              opacity: 0.4,
+            }}
+          />
         ))}
       </div>
     );
@@ -412,108 +453,178 @@ function TickerTable({ tickers, loading, tickerOrder, onReorder, onDelete }: Pro
 
   if (tickers.length === 0) {
     return (
-      <div className="bg-bg-secondary rounded-2xl p-6 card-hover">
-        <h2 className="font-display text-sm font-medium tracking-wider text-text-secondary uppercase mb-4">
-          Watchlist
-        </h2>
-        <p className="text-text-secondary text-sm">티커를 추가해주세요</p>
+      <div
+        className="opacity-0 animate-fade-in"
+        style={{ borderTop: '1px solid var(--text-primary)', padding: '40px 16px', textAlign: 'center' }}
+      >
+        <p
+          style={{
+            fontFamily: 'JetBrains Mono, monospace',
+            fontSize: '9px',
+            letterSpacing: '0.18em',
+            textTransform: 'uppercase',
+            color: 'var(--text-secondary)',
+          }}
+        >
+          티커를 추가해주세요
+        </p>
       </div>
     );
   }
 
+  const value = portfolioSummary ? splitDecimal(portfolioSummary.totalValue) : null;
+  const dailyUp = portfolioSummary ? portfolioSummary.totalDailyChange >= 0 : true;
+  const totalUp = portfolioSummary ? portfolioSummary.returnPct >= 0 : true;
+
   return (
-    <div data-no-swipe className="bg-bg-secondary rounded-2xl p-6 card-hover opacity-0 animate-fade-in stagger-2">
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="font-display text-sm font-medium tracking-wider text-text-secondary uppercase">
-          Watchlist
-        </h2>
-        <span className="text-xs text-text-secondary font-display">
-          {tickers[0]?.marketState === 'REGULAR' ? (
-            <span className="flex items-center gap-1.5">
-              <span className="w-1.5 h-1.5 rounded-full bg-accent-green animate-pulse-slow" />
-              LIVE
-            </span>
-          ) : (
-            'CLOSED'
-          )}
-        </span>
-      </div>
-
-      {/* Portfolio summary */}
-      {portfolioSummary && (
-        <div className="mb-4 rounded-xl bg-bg-tertiary/40 p-3 space-y-2.5">
-          {/* Donut + key numbers */}
-          <div className="flex items-center gap-3">
-            {portfolioSummary.segments.length > 0 && (
-              <DonutChart segments={portfolioSummary.segments} />
-            )}
-            <div className="flex-1 grid grid-cols-2 gap-x-3 gap-y-2">
-              <div>
-                <span className="text-[10px] text-text-dim font-display block mb-0.5">투자원금</span>
-                <span className="text-sm font-display font-semibold text-text-primary">
-                  ${formatNumber(portfolioSummary.totalInvested)}
-                </span>
-              </div>
-              <div className="text-right">
-                <span className="text-[10px] text-text-dim font-display block mb-0.5">전체 수익률</span>
-                <span className={`text-xl font-display font-bold leading-none ${portfolioSummary.returnPct >= 0 ? 'text-accent-blue' : 'text-accent-red'}`}>
-                  {portfolioSummary.returnPct >= 0 ? '+' : ''}{formatNumber(portfolioSummary.returnPct)}%
-                </span>
-              </div>
-              <div>
-                <span className="text-[10px] text-text-dim font-display block mb-0.5">평가손익</span>
-                <span className={`text-sm font-display font-bold ${portfolioSummary.totalPL >= 0 ? 'text-accent-blue' : 'text-accent-red'}`}>
-                  {portfolioSummary.totalPL >= 0 ? '+' : ''}{formatNumber(portfolioSummary.totalPL)}$
-                </span>
-              </div>
-              <div className="text-right">
-                <span className="text-[10px] text-text-dim font-display block mb-0.5">승률</span>
-                <span className="text-sm font-display font-semibold text-text-primary">
-                  {portfolioSummary.wins}/{portfolioSummary.total}
-                  <span className="text-text-dim text-[10px] ml-1">({formatNumber(portfolioSummary.winRate, 0)}%)</span>
-                </span>
-              </div>
-            </div>
+    <div data-no-swipe className="opacity-0 animate-fade-in stagger-2">
+      {/* ── Portfolio Value (n-perf) ── */}
+      {portfolioSummary && value && (
+        <div style={{ padding: '12px 16px', borderTop: '1px solid var(--text-primary)', borderBottom: '1px solid var(--text-primary)' }}>
+          <div
+            style={{
+              fontFamily: 'JetBrains Mono, monospace',
+              fontSize: '9px',
+              letterSpacing: '0.22em',
+              textTransform: 'uppercase',
+              color: 'var(--text-secondary)',
+              marginBottom: '6px',
+            }}
+          >
+            Portfolio Value
           </div>
+          <div style={{ fontSize: '36px', fontWeight: 300, letterSpacing: '-0.03em', lineHeight: 1, color: 'var(--text-primary)' }}>
+            ${value.int}
+            <sup style={{ fontSize: '14px', color: 'var(--text-secondary)' }}>.{value.dec}</sup>
+          </div>
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              marginTop: '4px',
+              fontFamily: 'JetBrains Mono, monospace',
+              fontSize: '10px',
+            }}
+          >
+            <span style={{ color: dailyUp ? 'var(--accent-green)' : 'var(--accent-red)' }}>
+              {dailyUp ? '↗' : '↘'} {dailyUp ? '+' : ''}${formatNumber(portfolioSummary.totalDailyChange)} ({dailyUp ? '+' : ''}{formatNumber(portfolioSummary.dailyChangePct)}%)
+            </span>
+            <span style={{ color: 'var(--text-secondary)' }}>
+              total {totalUp ? '+' : ''}{formatNumber(portfolioSummary.returnPct)}%
+            </span>
+          </div>
+        </div>
+      )}
 
-          {/* Allocation legend */}
-          {portfolioSummary.segments.length > 0 && (
-            <div className="flex flex-wrap gap-x-3 gap-y-1 pt-2 border-t border-bg-tertiary/50">
-              {portfolioSummary.segments.map((seg) => (
-                <span key={seg.symbol} className="flex items-center gap-1 text-[10px] font-display text-text-secondary">
-                  <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: seg.color }} />
-                  {seg.symbol} <span className="text-text-dim">{formatNumber(seg.pct, 0)}%</span>
-                </span>
-              ))}
-            </div>
-          )}
+      {/* ── Donut + legend (n-donut) ── */}
+      {portfolioSummary && portfolioSummary.segments.length > 0 && (
+        <div
+          style={{
+            display: 'flex',
+            gap: '14px',
+            padding: '10px 16px',
+            borderBottom: '1px solid var(--text-primary)',
+            alignItems: 'center',
+          }}
+        >
+          <DonutChart segments={portfolioSummary.segments} />
+          <div
+            style={{
+              flex: 1,
+              fontFamily: 'JetBrains Mono, monospace',
+              fontSize: '9px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '4px',
+            }}
+          >
+            {portfolioSummary.segments.map((seg) => (
+              <div
+                key={seg.symbol}
+                style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '6px' }}
+              >
+                <i style={{ width: '8px', height: '8px', background: seg.color, flexShrink: 0, display: 'inline-block' }} />
+                <span style={{ flex: 1, color: 'var(--text-secondary)' }}>{seg.symbol}</span>
+                <b style={{ fontWeight: 500, color: 'var(--text-primary)' }}>{formatNumber(seg.pct, 0)}%</b>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
-          {/* Best / Worst */}
-          {portfolioSummary.total > 1 && (
-            <div className="flex items-center gap-4 pt-2 border-t border-bg-tertiary/50 text-[11px] font-display">
-              {portfolioSummary.best && (
-                <span>
-                  <span className="text-text-dim">최고 </span>
-                  <span className={`font-semibold ${portfolioSummary.best.returnPct >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
-                    {portfolioSummary.best.symbol} {portfolioSummary.best.returnPct >= 0 ? '+' : ''}{formatNumber(portfolioSummary.best.returnPct)}%
-                  </span>
-                </span>
-              )}
-              {portfolioSummary.worst && portfolioSummary.worst.symbol !== portfolioSummary.best?.symbol && (
-                <span>
-                  <span className="text-text-dim">최악 </span>
-                  <span className={`font-semibold ${portfolioSummary.worst.returnPct >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
-                    {portfolioSummary.worst.symbol} {portfolioSummary.worst.returnPct >= 0 ? '+' : ''}{formatNumber(portfolioSummary.worst.returnPct)}%
-                  </span>
-                </span>
-              )}
-            </div>
+      {/* ── Stats 2x2 (n-stats4) ── */}
+      {portfolioSummary && (
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', borderBottom: '1px solid var(--text-primary)' }}>
+          <StatCell
+            k="평가손익"
+            v={`${portfolioSummary.totalPL >= 0 ? '+' : ''}$${formatNumber(portfolioSummary.totalPL)}`}
+            color={portfolioSummary.totalPL >= 0 ? 'var(--accent-green)' : 'var(--accent-red)'}
+            borderRight
+            borderBottom
+          />
+          <StatCell
+            k="수익률"
+            v={`${portfolioSummary.returnPct >= 0 ? '+' : ''}${formatNumber(portfolioSummary.returnPct)}%`}
+            color={portfolioSummary.returnPct >= 0 ? 'var(--accent-green)' : 'var(--accent-red)'}
+            big
+            borderBottom
+          />
+          <StatCell k="승률" v={`${portfolioSummary.wins} / ${portfolioSummary.total}`} borderRight />
+          <StatCell k="투자원금" v={`$${formatNumber(portfolioSummary.totalInvested)}`} />
+        </div>
+      )}
+
+      {/* ── Extremes (n-extremes) ── */}
+      {portfolioSummary && portfolioSummary.total > 1 && portfolioSummary.best && portfolioSummary.worst && (
+        <div
+          style={{
+            padding: '8px 16px',
+            borderBottom: '1px solid var(--text-primary)',
+            fontFamily: 'JetBrains Mono, monospace',
+            fontSize: '9px',
+            display: 'flex',
+            gap: '16px',
+          }}
+        >
+          <span>
+            <span style={{ color: 'var(--text-secondary)' }}>최고 </span>
+            <span style={{ color: portfolioSummary.best.returnPct >= 0 ? 'var(--accent-green)' : 'var(--accent-red)' }}>
+              {portfolioSummary.best.symbol} {portfolioSummary.best.returnPct >= 0 ? '+' : ''}{formatNumber(portfolioSummary.best.returnPct)}%
+            </span>
+          </span>
+          {portfolioSummary.worst.symbol !== portfolioSummary.best.symbol && (
+            <span>
+              <span style={{ color: 'var(--text-secondary)' }}>최악 </span>
+              <span style={{ color: portfolioSummary.worst.returnPct >= 0 ? 'var(--accent-green)' : 'var(--accent-red)' }}>
+                {portfolioSummary.worst.symbol} {portfolioSummary.worst.returnPct >= 0 ? '+' : ''}{formatNumber(portfolioSummary.worst.returnPct)}%
+              </span>
+            </span>
           )}
         </div>
       )}
 
+      {/* ── Holdings table header (n-tbl hdr) ── */}
       <div
-        className="space-y-1.5"
+        style={{
+          display: 'grid',
+          gridTemplateColumns: '24px 1fr auto auto',
+          gap: '10px',
+          padding: '6px 16px',
+          borderBottom: '1px solid var(--text-secondary)',
+          fontFamily: 'JetBrains Mono, monospace',
+          fontSize: '8px',
+          letterSpacing: '0.18em',
+          textTransform: 'uppercase',
+          color: 'var(--text-secondary)',
+        }}
+      >
+        <span>#</span>
+        <span>Holding</span>
+        <span style={{ textAlign: 'right' }}>Value</span>
+        <span style={{ textAlign: 'right' }}>P/L</span>
+      </div>
+
+      <div
         onPointerMove={handlePointerMove}
         onPointerUp={handleDragEnd}
         onPointerCancel={handleDragEnd}
@@ -525,10 +636,20 @@ function TickerTable({ tickers, loading, tickerOrder, onReorder, onDelete }: Pro
           const pos = calcPosition(symbolTrades);
           const plPercent = pos.avgCost > 0 && pos.totalQty > 0 ? ((t.price - pos.avgCost) / pos.avgCost) * 100 : null;
           const plUp = plPercent !== null && plPercent >= 0;
+          const positionValue = pos.totalQty > 0 ? t.price * pos.totalQty : null;
           const isDragging = dragSymbol === t.symbol;
           const isDropTarget = dragSymbol && overSymbol === t.symbol && overSymbol !== dragSymbol;
           const swipeDx = swipeDeltas[t.symbol] || 0;
           const showDeleteConfirm = confirmDelete === t.symbol;
+
+          // Display column 4: P/L% if holding, else 24h change%
+          const rightPct = plPercent !== null ? plPercent : t.changePercent;
+          const rightUp = plPercent !== null ? plUp : isUp;
+
+          // Sub-text: quantity + symbol if holding, else company name
+          const subText = pos.totalQty > 0
+            ? `${formatNumber(pos.totalQty, pos.totalQty % 1 === 0 ? 0 : 4)} ${t.symbol}`
+            : t.symbol;
 
           return (
             <div
@@ -544,151 +665,218 @@ function TickerTable({ tickers, loading, tickerOrder, onReorder, onDelete }: Pro
                   rowRefs.current.delete(t.symbol);
                 }
               }}
-              className={`relative rounded-xl transition-all duration-150 opacity-0 animate-slide-up ${
-                isOpen ? 'bg-bg-tertiary/40' : ''
-              } ${isDragging ? 'opacity-50 scale-[0.97]' : ''} ${
-                isDropTarget ? 'ring-1 ring-accent-blue/40 bg-accent-blue/[0.03]' : ''
+              className={`relative transition-all duration-150 opacity-0 animate-slide-up ${
+                isDragging ? 'opacity-50' : ''
               }`}
-              style={{ animationDelay: `${0.3 + i * 0.05}s` }}
+              style={{
+                borderBottom: '1px solid var(--bg-tertiary)',
+                animationDelay: `${0.3 + i * 0.05}s`,
+                background: isDropTarget ? 'var(--bg-tertiary)' : undefined,
+              }}
             >
-              {/* Delete confirmation overlay */}
               {showDeleteConfirm && (
-                <div className="flex items-center justify-center gap-4 py-4 px-4 bg-accent-red/10">
-                  <span className="text-sm font-display font-medium text-accent-red">삭제?</span>
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '12px',
+                    padding: '14px 16px',
+                    background: 'rgba(255,122,106,0.08)',
+                  }}
+                >
+                  <span
+                    style={{
+                      fontFamily: 'JetBrains Mono, monospace',
+                      fontSize: '10px',
+                      letterSpacing: '0.15em',
+                      textTransform: 'uppercase',
+                      color: 'var(--accent-red)',
+                    }}
+                  >
+                    삭제?
+                  </span>
                   <button
                     type="button"
                     onClick={() => handleConfirmDelete(t.symbol)}
-                    className="px-4 py-1.5 rounded-lg bg-accent-red text-white text-xs font-display font-semibold transition-colors hover:bg-accent-red/80"
+                    style={{
+                      padding: '5px 14px',
+                      border: '1px solid var(--accent-red)',
+                      background: 'var(--accent-red)',
+                      color: 'var(--bg-primary)',
+                      fontFamily: 'JetBrains Mono, monospace',
+                      fontSize: '9px',
+                      letterSpacing: '0.15em',
+                      textTransform: 'uppercase',
+                      cursor: 'pointer',
+                    }}
                   >
                     삭제
                   </button>
                   <button
                     type="button"
                     onClick={handleCancelDelete}
-                    className="px-4 py-1.5 rounded-lg bg-bg-tertiary text-text-secondary text-xs font-display font-semibold transition-colors hover:bg-bg-tertiary/80"
+                    style={{
+                      padding: '5px 14px',
+                      border: '1px solid var(--text-secondary)',
+                      background: 'transparent',
+                      color: 'var(--text-secondary)',
+                      fontFamily: 'JetBrains Mono, monospace',
+                      fontSize: '9px',
+                      letterSpacing: '0.15em',
+                      textTransform: 'uppercase',
+                      cursor: 'pointer',
+                    }}
                   >
                     취소
                   </button>
                 </div>
               )}
 
-              {/* Swipe container with action indicators behind */}
               {!showDeleteConfirm && (
                 <div className="relative">
-                  {/* Left action indicator (swipe right → pin) */}
+                  {/* Swipe action indicators */}
                   <div
                     className="absolute inset-y-0 left-0 flex items-center pl-4 pointer-events-none transition-opacity"
                     style={{ opacity: swipeDx > SWIPE_LOCK_THRESHOLD ? Math.min(1, swipeDx / SWIPE_THRESHOLD) : 0 }}
                   >
-                    <span className="text-xs font-display font-semibold text-accent-blue">Pin Top</span>
+                    <span
+                      style={{
+                        fontFamily: 'JetBrains Mono, monospace',
+                        fontSize: '9px',
+                        letterSpacing: '0.18em',
+                        textTransform: 'uppercase',
+                        color: 'var(--accent-amber)',
+                      }}
+                    >
+                      Pin
+                    </span>
                   </div>
-
-                  {/* Right action indicator (swipe left → delete) */}
                   <div
                     className="absolute inset-y-0 right-0 flex items-center pr-4 pointer-events-none transition-opacity"
                     style={{ opacity: swipeDx < -SWIPE_LOCK_THRESHOLD ? Math.min(1, Math.abs(swipeDx) / SWIPE_THRESHOLD) : 0 }}
                   >
-                    <span className="text-xs font-display font-semibold text-accent-red">삭제</span>
+                    <span
+                      style={{
+                        fontFamily: 'JetBrains Mono, monospace',
+                        fontSize: '9px',
+                        letterSpacing: '0.18em',
+                        textTransform: 'uppercase',
+                        color: 'var(--accent-red)',
+                      }}
+                    >
+                      삭제
+                    </span>
                   </div>
 
-                  {/* Swipeable row content */}
                   <div
                     className="relative touch-pan-y"
                     style={{
                       transform: swipeDx ? `translateX(${swipeDx}px)` : undefined,
                       transition: swipeDx ? 'none' : 'transform 0.2s ease-out',
-                      backgroundColor: swipeDx > SWIPE_LOCK_THRESHOLD
-                        ? `rgba(0, 170, 255, ${Math.min(0.06, (swipeDx / SWIPE_THRESHOLD) * 0.06)})`
-                        : swipeDx < -SWIPE_LOCK_THRESHOLD
-                        ? `rgba(255, 51, 102, ${Math.min(0.06, (Math.abs(swipeDx) / SWIPE_THRESHOLD) * 0.06)})`
-                        : undefined,
+                      background: 'var(--bg-primary)',
                     }}
                     onPointerDown={(e) => handleSwipePointerDown(t.symbol, e)}
                     onPointerMove={(e) => handleSwipePointerMove(t.symbol, e)}
                     onPointerUp={() => handleSwipePointerUp(t.symbol)}
                     onPointerCancel={() => handleSwipePointerUp(t.symbol)}
                   >
-                    {/* Collapsed row */}
-                    <div className="flex items-center">
-                      {/* Drag handle */}
-                      <div
-                        className="shrink-0 px-1 py-4 cursor-grab active:cursor-grabbing touch-none select-none"
+                    <button
+                      type="button"
+                      onClick={() => toggle(t.symbol)}
+                      style={{
+                        display: 'grid',
+                        gridTemplateColumns: '24px 1fr auto auto',
+                        gap: '10px',
+                        alignItems: 'center',
+                        padding: '8px 16px',
+                        width: '100%',
+                        background: 'transparent',
+                        border: 'none',
+                        cursor: 'pointer',
+                        textAlign: 'left',
+                      }}
+                    >
+                      {/* Index / drag handle */}
+                      <span
+                        style={{
+                          fontFamily: 'JetBrains Mono, monospace',
+                          fontSize: '9px',
+                          color: 'var(--text-secondary)',
+                          cursor: 'grab',
+                          touchAction: 'none',
+                        }}
                         onPointerDown={(e) => { e.stopPropagation(); handleDragStart(t.symbol, e); }}
                       >
-                        <GripIcon />
+                        {String(i + 1).padStart(2, '0')}
+                      </span>
+
+                      {/* Holding name + sub */}
+                      <div style={{ minWidth: 0 }}>
+                        <span
+                          style={{
+                            fontSize: '13px',
+                            fontWeight: 500,
+                            color: 'var(--text-primary)',
+                            display: 'block',
+                            whiteSpace: 'nowrap',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                          }}
+                        >
+                          {t.name}
+                        </span>
+                        <small
+                          style={{
+                            display: 'block',
+                            fontFamily: 'JetBrains Mono, monospace',
+                            fontSize: '8px',
+                            fontWeight: 400,
+                            color: 'var(--text-secondary)',
+                            letterSpacing: '0.1em',
+                            marginTop: '1px',
+                          }}
+                        >
+                          {subText}
+                        </small>
                       </div>
 
-                      <button
-                        type="button"
-                        onClick={() => toggle(t.symbol)}
-                        className={`flex-1 flex items-center gap-3 pr-3 py-3 rounded-r-xl transition-colors ${
-                          isOpen ? '' : 'hover:bg-bg-tertiary/30'
-                        }`}
+                      {/* Value */}
+                      <span
+                        style={{
+                          textAlign: 'right',
+                          fontFamily: 'JetBrains Mono, monospace',
+                          fontSize: '11px',
+                          fontWeight: 500,
+                          color: 'var(--text-primary)',
+                        }}
                       >
-                        {/* Symbol + Name */}
-                        <div className="flex flex-col items-start min-w-[72px]">
-                          <span className="font-display font-bold text-sm text-text-primary leading-tight">
-                            {t.symbol}
-                          </span>
-                          <span className="text-[11px] text-text-secondary truncate max-w-[80px] leading-tight mt-0.5">
-                            {t.name}
-                          </span>
-                        </div>
+                        {positionValue !== null
+                          ? `$${formatNumber(positionValue)}`
+                          : `$${formatNumber(t.price)}`}
+                      </span>
 
-                        {/* Sparkline */}
-                        <div className="hidden sm:block shrink-0">
-                          {t.sparkline && t.sparkline.length >= 2 ? (
-                            <Sparkline data={t.sparkline} />
-                          ) : (
-                            <div className="w-[80px] h-[28px] bg-bg-tertiary/30 rounded" />
-                          )}
-                        </div>
-
-                        <div className="flex-1" />
-
-                        {/* Right: Price + Badges */}
-                        <div className="flex items-center gap-2 shrink-0">
-                          {plPercent !== null && (
-                            <span
-                              className={`hidden sm:inline-block px-1.5 py-0.5 rounded text-[11px] font-display font-semibold ${
-                                plUp ? 'bg-accent-blue/10 text-accent-blue' : 'bg-accent-red/10 text-accent-red'
-                              }`}
-                            >
-                              P/L {plUp ? '+' : ''}{formatNumber(plPercent)}%
-                            </span>
-                          )}
-                          <div className="flex flex-col items-end">
-                            <span className="font-display font-semibold text-sm text-text-primary leading-tight">
-                              ${formatNumber(t.price)}
-                            </span>
-                            <span
-                              className={`text-[11px] font-display font-semibold leading-tight mt-0.5 ${
-                                isUp ? 'text-accent-green' : 'text-accent-red'
-                              }`}
-                            >
-                              {isUp ? '+' : ''}{formatNumber(t.change)} ({isUp ? '+' : ''}{formatNumber(t.changePercent)}%)
-                            </span>
-                          </div>
-                          <svg
-                            className={`w-3.5 h-3.5 text-text-dim transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}
-                            fill="none"
-                            viewBox="0 0 24 24"
-                            stroke="currentColor"
-                            strokeWidth={2.5}
-                          >
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-                          </svg>
-                        </div>
-                      </button>
-                    </div>
+                      {/* P/L% (or 24h change% if no position) */}
+                      <span
+                        style={{
+                          textAlign: 'right',
+                          fontFamily: 'JetBrains Mono, monospace',
+                          fontSize: '10px',
+                          color: rightUp ? 'var(--accent-green)' : 'var(--accent-red)',
+                        }}
+                      >
+                        {rightUp ? '+' : ''}{formatNumber(rightPct)}%
+                      </span>
+                    </button>
 
                     {/* Expanded detail panel */}
                     <div
                       className={`transition-all duration-200 ease-out ${
                         isOpen ? 'max-h-[1200px] opacity-100 overflow-y-auto' : 'max-h-0 opacity-0 overflow-hidden'
                       }`}
+                      style={{ borderTop: isOpen ? '1px solid var(--bg-tertiary)' : undefined }}
                     >
-                      <div className="px-3 pb-4 pt-1 space-y-3">
+                      <div className="px-4 pb-4 pt-3 space-y-3">
                         {/* Day Range Bar */}
                         <div>
                           <span className="text-[11px] text-text-dim font-display mb-1.5 block">일일 가격 범위</span>

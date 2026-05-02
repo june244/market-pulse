@@ -6,10 +6,17 @@ module.exports = {
       fontFamily: {
         display: ['JetBrains Mono', 'monospace'],
         body: ['IBM Plex Sans', 'sans-serif'],
+        tight: ['Inter Tight', 'sans-serif'],
       },
       colors: {
         bg: { primary: 'var(--bg-primary)', secondary: 'var(--bg-secondary)', tertiary: 'var(--bg-tertiary)' },
-        accent: { green: '#00ff87', red: '#ff3366', amber: '#ffaa00', blue: '#00aaff', muted: '#555570' },
+        accent: {
+          green: 'var(--accent-green)',
+          red: 'var(--accent-red)',
+          amber: 'var(--accent-amber)',
+          blue: 'var(--accent-blue)',
+          muted: '#555570',
+        },
         text: { primary: 'var(--text-primary)', secondary: 'var(--text-secondary)', dim: 'var(--text-dim)' },
       },
       animation: {

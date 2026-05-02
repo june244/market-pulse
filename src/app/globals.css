@@ -301,6 +301,71 @@ body {
   font-weight: 300;
 }
 
+/* ──── NORDIC: Input / Select / Textarea ──── */
+[data-theme="nordic"] input,
+[data-theme="nordic"] select,
+[data-theme="nordic"] textarea,
+[data-theme="nordic-light"] input,
+[data-theme="nordic-light"] select,
+[data-theme="nordic-light"] textarea {
+  border-radius: 0 !important;
+  background: transparent !important;
+  border-color: var(--text-secondary) !important;
+  color: var(--text-primary) !important;
+  font-family: 'JetBrains Mono', monospace !important;
+  font-size: 11px !important;
+}
+[data-theme="nordic"] input::placeholder,
+[data-theme="nordic"] textarea::placeholder,
+[data-theme="nordic-light"] input::placeholder,
+[data-theme="nordic-light"] textarea::placeholder {
+  color: var(--text-secondary) !important;
+  opacity: 0.5;
+}
+[data-theme="nordic"] input:focus,
+[data-theme="nordic"] select:focus,
+[data-theme="nordic"] textarea:focus,
+[data-theme="nordic-light"] input:focus,
+[data-theme="nordic-light"] select:focus,
+[data-theme="nordic-light"] textarea:focus {
+  border-color: var(--text-primary) !important;
+  outline: none !important;
+  box-shadow: none !important;
+}
+/* Date input calendar icon color */
+[data-theme="nordic"] input[type="date"]::-webkit-calendar-picker-indicator,
+[data-theme="nordic-light"] input[type="date"]::-webkit-calendar-picker-indicator {
+  filter: invert(1) opacity(0.4);
+  cursor: pointer;
+}
+[data-theme="nordic-light"] input[type="date"]::-webkit-calendar-picker-indicator {
+  filter: invert(0) opacity(0.4);
+}
+
+/* ──── NORDIC: Scrollbar ──── */
+[data-theme="nordic"] ::-webkit-scrollbar,
+[data-theme="nordic-light"] ::-webkit-scrollbar {
+  width: 2px;
+}
+[data-theme="nordic"] ::-webkit-scrollbar-thumb,
+[data-theme="nordic-light"] ::-webkit-scrollbar-thumb {
+  background: var(--text-secondary);
+  border-radius: 0;
+}
+
+/* ──── NORDIC: Animated pulse dot ──── */
+[data-theme="nordic"] .animate-pulse-slow,
+[data-theme="nordic-light"] .animate-pulse-slow {
+  animation: none;
+  box-shadow: none !important;
+}
+
+/* ──── NORDIC: noise-bg off ──── */
+[data-theme="nordic"] body::before,
+[data-theme="nordic-light"] body::before {
+  display: none;
+}
+
 /* ──── BRUTALIST: Box borders, monospace, no radius ──── */
 [data-theme="brutalist"] .card-hover {
   background: transparent !important;

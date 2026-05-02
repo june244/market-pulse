@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from 'next';
-import { JetBrains_Mono, IBM_Plex_Sans } from 'next/font/google';
+import { JetBrains_Mono, IBM_Plex_Sans, Inter_Tight } from 'next/font/google';
 import './globals.css';
 
 const jetbrainsMono = JetBrains_Mono({
@@ -13,6 +13,13 @@ const ibmPlexSans = IBM_Plex_Sans({
   subsets: ['latin'],
   weight: ['300', '400', '500', '600'],
   variable: '--font-ibm-plex-sans',
+  display: 'swap',
+});
+
+const interTight = Inter_Tight({
+  subsets: ['latin'],
+  weight: ['300', '400', '500', '600', '700'],
+  variable: '--font-inter-tight',
   display: 'swap',
 });
 
@@ -37,7 +44,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="ko" className={`${jetbrainsMono.variable} ${ibmPlexSans.variable}`}>
+    <html lang="ko" className={`${jetbrainsMono.variable} ${ibmPlexSans.variable} ${interTight.variable}`}>
       <body className="noise-bg">{children}</body>
     </html>
   );

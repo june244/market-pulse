@@ -193,7 +193,7 @@ export function clamp(v: number, min: number, max: number): number {
 }
 
 // 7-level color scheme shared by MarketThermometer and HeatmapCalendar
-export const SCORE_LEVELS: { max: number; label: string; color: string }[] = [
+const SCORE_LEVELS_DARK: { max: number; label: string; color: string }[] = [
   { max: 15, label: '극한', color: '#3366ff' },
   { max: 30, label: '냉각', color: '#4499ff' },
   { max: 45, label: '서늘', color: '#00ccaa' },
@@ -203,24 +203,43 @@ export const SCORE_LEVELS: { max: number; label: string; color: string }[] = [
   { max: 100, label: '극과열', color: '#ff3366' },
 ];
 
-export function getScoreLevel(score: number): { label: string; color: string } {
-  for (const l of SCORE_LEVELS) {
+// Muted, newsprint-friendly variants for nordic-light theme
+const SCORE_LEVELS_LIGHT: { max: number; label: string; color: string }[] = [
+  { max: 15, label: '극한', color: '#1a3a8a' },
+  { max: 30, label: '냉각', color: '#2a5aa8' },
+  { max: 45, label: '서늘', color: '#1a7066' },
+  { max: 55, label: '적정', color: '#4a7a30' },
+  { max: 70, label: '온기', color: '#7a5a10' },
+  { max: 85, label: '과열', color: '#8a4a30' },
+  { max: 100, label: '극과열', color: '#8a1a1a' },
+];
+
+// Default export still points to dark for SSR / non-theme-aware callers
+export const SCORE_LEVELS = SCORE_LEVELS_DARK;
+
+export function getScoreLevels(theme?: Theme) {
+  return theme === 'nordic-light' ? SCORE_LEVELS_LIGHT : SCORE_LEVELS_DARK;
+}
+
+export function getScoreLevel(score: number, theme?: Theme): { label: string; color: string } {
+  const levels = getScoreLevels(theme);
+  for (const l of levels) {
     if (score <= l.max) return l;
   }
-  return SCORE_LEVELS[SCORE_LEVELS.length - 1];
+  return levels[levels.length - 1];
 }
 
 // Theme persistence
 const THEME_KEY = 'market-pulse-theme';
-export type Theme = 'dark' | 'light' | 'oled' | 'bloomberg' | 'nordic' | 'nordic-light' | 'brutalist';
+export type Theme = 'nordic' | 'nordic-light';
 
 export function loadTheme(): Theme {
-  if (typeof window === 'undefined') return 'dark';
+  if (typeof window === 'undefined') return 'nordic';
   try {
     const saved = localStorage.getItem(THEME_KEY);
-    if (saved && ['dark', 'light', 'oled', 'bloomberg', 'nordic', 'nordic-light', 'brutalist'].includes(saved)) return saved as Theme;
+    if (saved === 'nordic-light') return 'nordic-light';
   } catch {}
-  return 'dark';
+  return 'nordic';
 }
 
 export function saveTheme(theme: Theme): void {

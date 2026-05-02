@@ -140,7 +140,7 @@ function CoinChart({ data, color, id }: { data: ChartPoint[]; color: string; id:
       {/* Grid lines */}
       {[0.25, 0.5, 0.75].map((frac) => {
         const y = padTop + chartH * (1 - frac);
-        return <line key={frac} x1={0} y1={y} x2={W} y2={y} stroke="rgba(255,255,255,0.04)" strokeWidth="1" />;
+        return <line key={frac} x1={0} y1={y} x2={W} y2={y} stroke="var(--bg-tertiary)" strokeWidth="1" />;
       })}
 
       {/* Area + Line */}
@@ -215,7 +215,7 @@ function CoinCard({ coin, loading }: { coin: CoinData | null; loading: boolean }
       </div>
 
       {/* Chart */}
-      <div className="relative h-[200px] mb-4 rounded-xl bg-bg-primary/40 overflow-hidden p-1">
+      <div className="relative h-[200px] mb-4 overflow-hidden p-1" style={{ border: '1px solid var(--bg-tertiary)' }}>
         <CoinChart data={coin.chart} color={accentColor} id={coin.symbol} />
       </div>
 
@@ -227,7 +227,7 @@ function CoinCard({ coin, loading }: { coin: CoinData | null; loading: boolean }
             <div
               key={pr.period}
               className="rounded-xl p-2.5 text-center"
-              style={{ backgroundColor: up ? 'rgba(0,255,135,0.06)' : 'rgba(255,51,102,0.06)' }}
+              style={{ backgroundColor: up ? 'var(--accent-green-soft)' : 'var(--accent-red-soft)' }}
             >
               <span className="block text-[10px] text-text-dim font-display font-medium mb-1">
                 {pr.period}

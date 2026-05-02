@@ -3,16 +3,26 @@
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { DayScore, HistoryResponse } from '@/lib/types';
-import { SCORE_LEVELS, getScoreLevel } from '@/lib/utils';
+import { getScoreLevel, getScoreLevels } from '@/lib/utils';
+import { useTheme } from '@/hooks/useTheme';
 
-const DAY_HEADERS = ['일', '월', '화', '수', '목', '금', '토'];
+const DOW_HEADERS = ['MO', 'TU', 'WE', 'TH', 'FR', 'SA', 'SU'];
+const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+
+interface CalendarEvent {
+  date: string;
+  dateKey: string;
+  title: string;
+  country: string;
+  impact: 'High' | 'Medium';
+}
 
 interface MonthGroup {
-  key: string; // "YYYY-MM"
+  key: string;       // "YYYY-MM"
   year: number;
-  month: number; // 1-indexed
-  label: string;
-  days: (DayScore | null)[]; // padded with null for leading empty cells
+  month: number;     // 1-indexed
+  label: string;     // "April 2026"
+  days: (DayScore | null)[]; // padded with null for leading empty cells (Monday-first)
 }
 
 function groupByMonth(days: DayScore[]): MonthGroup[] {
@@ -26,9 +36,11 @@ function groupByMonth(days: DayScore[]): MonthGroup[] {
   const groups: MonthGroup[] = [];
   for (const [key, monthDays] of Array.from(map.entries())) {
     const [y, m] = key.split('-').map(Number);
-    const label = new Date(y, m - 1, 1).toLocaleDateString('ko-KR', { year: 'numeric', month: 'long' });
+    const label = `${MONTH_NAMES[m - 1]} ${y}`;
     const firstDate = new Date(y, m - 1, 1);
-    const leadingPad = firstDate.getDay();
+    // Monday-first: shift day index. Sun=0 → 6, Mon=1 → 0, …, Sat=6 → 5
+    const dow = firstDate.getDay();
+    const leadingPad = (dow + 6) % 7;
     const padded: (DayScore | null)[] = Array(leadingPad).fill(null);
 
     const dayMap = new Map(monthDays.map((d) => [d.date, d]));
@@ -44,9 +56,30 @@ function groupByMonth(days: DayScore[]): MonthGroup[] {
   return groups;
 }
 
-// Detail modal
+function hexToRgba(hex: string, alpha: number): string {
+  const h = hex.replace('#', '');
+  const r = parseInt(h.slice(0, 2), 16);
+  const g = parseInt(h.slice(2, 4), 16);
+  const b = parseInt(h.slice(4, 6), 16);
+  return `rgba(${r},${g},${b},${alpha})`;
+}
+
+function todayKeyET(): string {
+  // Approximate today in ET — date string only.
+  // Using the user's local timezone is acceptable for highlight purposes since
+  // the historyStore uses ET and most users are within a few hours of it.
+  const now = new Date();
+  // ET = UTC-5 (winter) / UTC-4 (summer); for highlight only, use UTC date as fallback.
+  const etOffsetH = -4;
+  const utcMs = now.getTime() + now.getTimezoneOffset() * 60 * 1000;
+  const et = new Date(utcMs + etOffsetH * 60 * 60 * 1000);
+  return et.toISOString().slice(0, 10);
+}
+
+// ── Day detail modal ──
 function DayDetail({ day, onClose }: { day: DayScore; onClose: () => void }) {
-  const level = getScoreLevel(day.composite);
+  const theme = useTheme();
+  const level = getScoreLevel(day.composite, theme);
   const dateLabel = new Date(day.date + 'T12:00:00').toLocaleDateString('ko-KR', {
     year: 'numeric',
     month: 'long',
@@ -58,16 +91,17 @@ function DayDetail({ day, onClose }: { day: DayScore; onClose: () => void }) {
     <div className="fixed inset-0 z-[200] flex items-end md:items-center justify-center" onClick={onClose}>
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
       <div
-        className="relative w-full md:w-96 bg-bg-secondary rounded-t-2xl md:rounded-2xl p-6 pb-8 md:pb-6 animate-slide-up"
+        className="relative w-full md:w-96 p-6 pb-8 md:pb-6 animate-slide-up"
+        style={{ background: 'var(--bg-primary)', border: '1px solid var(--text-primary)' }}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="w-10 h-1 bg-bg-tertiary rounded-full mx-auto mb-4 md:hidden" />
+        <div className="w-10 h-px mx-auto mb-4 md:hidden" style={{ background: 'var(--bg-tertiary)' }} />
         <p className="text-sm text-text-secondary font-display mb-4">{dateLabel}</p>
 
         <div className="flex items-center gap-3 mb-6">
           <div
-            className="w-14 h-14 rounded-2xl flex items-center justify-center text-2xl font-display font-bold text-white"
-            style={{ backgroundColor: level.color }}
+            className="w-14 h-14 flex items-center justify-center text-2xl font-display font-bold"
+            style={{ backgroundColor: level.color, color: '#fff' }}
           >
             {day.composite}
           </div>
@@ -86,7 +120,8 @@ function DayDetail({ day, onClose }: { day: DayScore; onClose: () => void }) {
 
         <button
           onClick={onClose}
-          className="mt-5 w-full py-2.5 rounded-xl bg-bg-tertiary text-text-secondary text-sm font-display font-medium hover:bg-bg-tertiary/80 transition-colors"
+          className="mt-5 w-full py-2.5 text-sm font-display font-medium transition-colors"
+          style={{ border: '1px solid var(--bg-tertiary)', background: 'transparent', color: 'var(--text-secondary)' }}
         >
           닫기
         </button>
@@ -97,7 +132,7 @@ function DayDetail({ day, onClose }: { day: DayScore; onClose: () => void }) {
 
 function Indicator({ label, value }: { label: string; value: string }) {
   return (
-    <div className="bg-bg-tertiary/50 rounded-xl p-3">
+    <div style={{ border: '1px solid var(--bg-tertiary)', padding: '12px' }}>
       <p className="text-[10px] text-text-dim font-display mb-1">{label}</p>
       <p className="text-sm font-display font-semibold text-text-primary">{value}</p>
     </div>
@@ -106,24 +141,15 @@ function Indicator({ label, value }: { label: string; value: string }) {
 
 function CalendarSkeleton() {
   return (
-    <div className="space-y-4">
-      <div className="bg-bg-secondary rounded-2xl p-4">
-        <div className="animate-pulse bg-bg-tertiary rounded h-4 w-40 mb-2" />
-        <div className="flex gap-1">
-          {Array.from({ length: 7 }).map((_, i) => (
-            <div key={i} className="animate-pulse bg-bg-tertiary rounded-sm h-3 flex-1" />
-          ))}
-        </div>
+    <div className="opacity-0 animate-fade-in" style={{ borderTop: '1px solid var(--text-primary)' }}>
+      <div style={{ padding: '10px 16px', borderBottom: '1px solid var(--text-primary)' }}>
+        <div className="animate-pulse h-3 w-32" style={{ background: 'var(--bg-tertiary)' }} />
+        <div className="animate-pulse h-[50px] w-full mt-3" style={{ background: 'var(--bg-tertiary)', opacity: 0.5 }} />
       </div>
-      <div className="bg-bg-secondary rounded-2xl p-4">
-        <div className="flex items-center justify-between mb-4">
-          <div className="animate-pulse bg-bg-tertiary rounded h-5 w-8" />
-          <div className="animate-pulse bg-bg-tertiary rounded h-5 w-32" />
-          <div className="animate-pulse bg-bg-tertiary rounded h-5 w-8" />
-        </div>
-        <div className="grid grid-cols-7 gap-1">
-          {Array.from({ length: 35 }).map((_, j) => (
-            <div key={j} className="animate-pulse bg-bg-tertiary rounded-lg aspect-square" />
+      <div style={{ padding: '10px 16px' }}>
+        <div className="grid grid-cols-7 gap-px">
+          {Array.from({ length: 28 }).map((_, j) => (
+            <div key={j} className="animate-pulse aspect-square" style={{ background: 'var(--bg-tertiary)', opacity: 0.5 }} />
           ))}
         </div>
       </div>
@@ -131,19 +157,17 @@ function CalendarSkeleton() {
   );
 }
 
-// Composite score history line chart
+// ── 90-day Temperature History (n-hist) ──
 function HistoryLineChart({ data }: { data: DayScore[] }) {
+  const theme = useTheme();
   const days = data.filter((d) => d.marketOpen).slice(-90);
   if (days.length < 3) return null;
 
-  const W = 400;
-  const H = 80;
-  const padT = 8;
-  const padB = 4;
-  const chartH = H - padT - padB;
+  const W = 300;
+  const H = 50;
 
   const xScale = (i: number) => (i / (days.length - 1)) * W;
-  const yScale = (v: number) => padT + chartH - (v / 100) * chartH;
+  const yScale = (v: number) => H - (v / 100) * H;
 
   const linePath = days.map((d, i) =>
     `${i === 0 ? 'M' : 'L'}${xScale(i).toFixed(1)},${yScale(d.composite).toFixed(1)}`
@@ -151,101 +175,342 @@ function HistoryLineChart({ data }: { data: DayScore[] }) {
   const areaPath = `${linePath} L${W},${H} L0,${H} Z`;
 
   const lastScore = days[days.length - 1].composite;
-  const lineColor = getScoreLevel(lastScore).color;
-  const labelIdxs = [0, Math.floor((days.length - 1) / 2), days.length - 1];
+  const lineColor = getScoreLevel(lastScore, theme).color;
+
+  // 4 month labels along the x axis
+  const monthLabels: { idx: number; label: string }[] = [];
+  let lastMonth = '';
+  days.forEach((d, i) => {
+    const m = d.date.slice(5, 7);
+    if (m !== lastMonth) {
+      lastMonth = m;
+      monthLabels.push({ idx: i, label: MONTH_NAMES[parseInt(m, 10) - 1].slice(0, 3).toUpperCase() });
+    }
+  });
+  const visibleLabels = monthLabels.slice(-4);
 
   return (
-    <div className="bg-bg-secondary rounded-2xl p-4 card-hover">
-      <div className="flex items-center justify-between mb-3">
-        <h3 className="font-display text-sm font-medium text-text-secondary tracking-wider uppercase">
-          시장 온도 추이
-        </h3>
-        <span
-          className="text-xs font-display font-semibold px-2 py-0.5 rounded-full"
-          style={{ backgroundColor: `${lineColor}1a`, color: lineColor }}
-        >
-          현재 {lastScore}°
-        </span>
+    <div style={{ padding: '10px 16px', borderBottom: '1px solid var(--text-primary)' }}>
+      <div
+        style={{
+          fontFamily: 'JetBrains Mono, monospace',
+          fontSize: '9px',
+          letterSpacing: '0.18em',
+          textTransform: 'uppercase',
+          color: 'var(--text-secondary)',
+          marginBottom: '6px',
+          display: 'flex',
+          justifyContent: 'space-between',
+        }}
+      >
+        <span>Temperature History · 90D</span>
+        <span style={{ color: 'var(--accent-amber)' }}>{lastScore.toFixed(1)}°</span>
       </div>
       <svg
         viewBox={`0 0 ${W} ${H}`}
         width="100%"
-        height="80"
+        height="50"
         preserveAspectRatio="none"
-        className="overflow-visible"
+        style={{ display: 'block' }}
       >
-        <defs>
-          <linearGradient id="histAreaGrad" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor={lineColor} stopOpacity="0.25" />
-            <stop offset="100%" stopColor={lineColor} stopOpacity="0.02" />
-          </linearGradient>
-        </defs>
-        {/* Neutral 50 reference line */}
         <line
-          x1={0} y1={yScale(50)} x2={W} y2={yScale(50)}
-          stroke="rgba(255,255,255,0.08)"
-          strokeWidth="1"
-          strokeDasharray="4 4"
+          x1={0} y1={H / 2} x2={W} y2={H / 2}
+          stroke="currentColor"
+          strokeOpacity="0.12"
+          strokeWidth="0.8"
         />
-        <path d={areaPath} fill="url(#histAreaGrad)" />
+        <path d={areaPath} fill={lineColor} fillOpacity={theme === 'nordic-light' ? 0.08 : 0.12} />
         <path d={linePath} fill="none" stroke={lineColor} strokeWidth="1.5" strokeLinejoin="round" />
-        {/* Last point dot */}
-        <circle
-          cx={xScale(days.length - 1)}
-          cy={yScale(lastScore)}
-          r="3"
-          fill={lineColor}
-          style={{ filter: `drop-shadow(0 0 4px ${lineColor})` }}
-        />
+        <circle cx={xScale(days.length - 1)} cy={yScale(lastScore)} r="3" fill={lineColor} />
       </svg>
-      <div className="flex justify-between mt-1">
-        {labelIdxs.map((idx, i) => (
-          <span
-            key={days[idx].date}
-            className={`text-[9px] text-text-dim font-display ${i === 1 ? 'flex-1 text-center' : ''}`}
-          >
-            {days[idx].date.slice(5).replace('-', '/')}
-          </span>
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          fontFamily: 'JetBrains Mono, monospace',
+          fontSize: '8px',
+          color: 'var(--text-secondary)',
+          marginTop: '3px',
+        }}
+      >
+        {visibleLabels.map((l) => (
+          <span key={`${l.idx}-${l.label}`}>{l.label}</span>
         ))}
       </div>
     </div>
   );
 }
 
-// Nav arrow button
-function NavButton({ direction, disabled, onClick }: { direction: 'prev' | 'next'; disabled: boolean; onClick: () => void }) {
+// ── Score Levels legend (n-heat-leg) ──
+function ScoreLevelsLegend() {
+  const theme = useTheme();
+  const levels = getScoreLevels(theme);
   return (
-    <button
-      onClick={onClick}
-      disabled={disabled}
-      className="p-2 rounded-lg bg-bg-tertiary hover:bg-bg-tertiary/80 transition-colors text-text-secondary disabled:opacity-20 disabled:pointer-events-none"
-    >
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        {direction === 'prev'
-          ? <path d="M15 18l-6-6 6-6" />
-          : <path d="M9 18l6-6-6-6" />}
-      </svg>
-    </button>
+    <div style={{ padding: '8px 16px', borderBottom: '1px solid var(--text-primary)' }}>
+      <div
+        style={{
+          fontFamily: 'JetBrains Mono, monospace',
+          fontSize: '9px',
+          letterSpacing: '0.18em',
+          textTransform: 'uppercase',
+          color: 'var(--text-secondary)',
+          marginBottom: '6px',
+        }}
+      >
+        Score Levels
+      </div>
+      <div style={{ display: 'flex', gap: '3px' }}>
+        {levels.map((l) => (
+          <div key={l.label} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }}>
+            <div style={{ width: '100%', height: '8px', background: l.color }} />
+            <span
+              style={{
+                fontFamily: 'JetBrains Mono, monospace',
+                fontSize: '7px',
+                color: 'var(--text-secondary)',
+              }}
+            >
+              {l.label}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ── Calendar grid (n-cal) ──
+function CalendarGrid({
+  month, currentMonthIdx, totalMonths, eventKeys, todayKey, theme, onPrev, onNext, onDayClick,
+}: {
+  month: MonthGroup;
+  currentMonthIdx: number;
+  totalMonths: number;
+  eventKeys: Set<string>;
+  todayKey: string;
+  theme: 'nordic' | 'nordic-light';
+  onPrev: () => void;
+  onNext: () => void;
+  onDayClick: (d: DayScore) => void;
+}) {
+  return (
+    <div style={{ padding: '10px 16px', borderBottom: '1px solid var(--text-primary)' }}>
+      <div
+        style={{
+          fontFamily: 'JetBrains Mono, monospace',
+          fontSize: '9px',
+          letterSpacing: '0.18em',
+          textTransform: 'uppercase',
+          color: 'var(--text-secondary)',
+          marginBottom: '6px',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+        }}
+      >
+        <span style={{ color: 'var(--text-primary)' }}>{month.label}</span>
+        <span style={{ display: 'inline-flex', gap: '8px' }}>
+          <button
+            onClick={onPrev}
+            disabled={currentMonthIdx <= 0}
+            aria-label="이전 달"
+            style={{
+              background: 'transparent', border: 'none', cursor: 'pointer',
+              color: 'var(--text-secondary)',
+              opacity: currentMonthIdx <= 0 ? 0.3 : 1,
+              padding: 0, fontSize: '12px', lineHeight: 1,
+            }}
+          >‹</button>
+          <span style={{ color: 'var(--text-secondary)', opacity: 0.5 }}>·</span>
+          <button
+            onClick={onNext}
+            disabled={currentMonthIdx >= totalMonths - 1}
+            aria-label="다음 달"
+            style={{
+              background: 'transparent', border: 'none', cursor: 'pointer',
+              color: 'var(--text-secondary)',
+              opacity: currentMonthIdx >= totalMonths - 1 ? 0.3 : 1,
+              padding: 0, fontSize: '12px', lineHeight: 1,
+            }}
+          >›</button>
+        </span>
+      </div>
+
+      {/* Day-of-week header */}
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(7, 1fr)',
+          fontFamily: 'JetBrains Mono, monospace',
+          fontSize: '8px',
+          color: 'var(--text-secondary)',
+          textAlign: 'center',
+          padding: '3px 0',
+          borderBottom: '1px solid var(--text-primary)',
+        }}
+      >
+        {DOW_HEADERS.map((d) => <span key={d}>{d}</span>)}
+      </div>
+
+      {/* Day grid */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)' }}>
+        {month.days.map((day, idx) => {
+          const isLastCol = (idx % 7) === 6;
+          const baseStyle: React.CSSProperties = {
+            aspectRatio: '1',
+            borderRight: isLastCol ? 'none' : '1px solid var(--bg-tertiary)',
+            borderBottom: '1px solid var(--bg-tertiary)',
+            padding: '3px 4px',
+            fontFamily: 'JetBrains Mono, monospace',
+            fontSize: '9px',
+            display: 'flex',
+            flexDirection: 'column',
+            justifyContent: 'space-between',
+          };
+
+          if (!day) {
+            return <div key={`pad-${idx}`} style={baseStyle} />;
+          }
+
+          const dateNum = parseInt(day.date.split('-')[2], 10);
+          const isToday = day.date === todayKey;
+          const hasEvent = eventKeys.has(day.date);
+
+          if (!day.marketOpen) {
+            return (
+              <div key={day.date} style={{ ...baseStyle, color: 'var(--bg-tertiary)' }}>
+                <span>{dateNum}</span>
+              </div>
+            );
+          }
+
+          const level = getScoreLevel(day.composite, theme);
+          const tintAlpha = theme === 'nordic-light' ? 0.18 : 0.25;
+          const bg = isToday ? 'var(--text-primary)' : hexToRgba(level.color, tintAlpha);
+          const color = isToday ? 'var(--bg-primary)' : 'var(--text-primary)';
+
+          return (
+            <button
+              key={day.date}
+              onClick={() => onDayClick(day)}
+              title={`${day.date}: ${day.composite}°`}
+              style={{
+                ...baseStyle,
+                background: bg,
+                color,
+                border: 'none',
+                borderRight: isLastCol ? 'none' : '1px solid var(--bg-tertiary)',
+                borderBottom: '1px solid var(--bg-tertiary)',
+                cursor: 'pointer',
+                textAlign: 'left',
+              }}
+            >
+              <span>{dateNum}</span>
+              {hasEvent && (
+                <span
+                  style={{
+                    width: '3px',
+                    height: '3px',
+                    background: isToday ? 'var(--bg-primary)' : 'var(--accent-amber)',
+                    borderRadius: '50%',
+                    alignSelf: 'flex-end',
+                  }}
+                />
+              )}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ── Events list (n-events) ──
+function EventsList({ events }: { events: CalendarEvent[] }) {
+  if (events.length === 0) return null;
+
+  // Show next ~6 events from now
+  const now = Date.now();
+  const upcoming = events
+    .filter((e) => new Date(e.date).getTime() >= now - 6 * 60 * 60 * 1000)
+    .slice(0, 6);
+
+  if (upcoming.length === 0) return null;
+
+  return (
+    <div style={{ padding: '8px 16px' }}>
+      {upcoming.map((e, i) => {
+        const d = new Date(e.date);
+        const dd = String(d.getDate()).padStart(2, '0');
+        const hh = String(d.getHours()).padStart(2, '0');
+        const mm = String(d.getMinutes()).padStart(2, '0');
+        const isHigh = e.impact === 'High';
+        return (
+          <div
+            key={`${e.date}-${e.title}-${i}`}
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'auto 1fr auto',
+              gap: '8px',
+              padding: '7px 0',
+              borderBottom: i === upcoming.length - 1 ? 'none' : '1px solid var(--bg-tertiary)',
+              fontFamily: 'JetBrains Mono, monospace',
+              fontSize: '9px',
+              alignItems: 'baseline',
+            }}
+          >
+            <span style={{ color: 'var(--text-secondary)', letterSpacing: '0.08em' }}>
+              {dd} · {hh}:{mm}
+            </span>
+            <span style={{
+              fontFamily: "'Inter Tight', sans-serif",
+              fontSize: '11px',
+              fontWeight: 500,
+              color: 'var(--text-primary)',
+            }}>
+              {e.title}
+            </span>
+            <span style={{
+              fontFamily: 'JetBrains Mono, monospace',
+              fontSize: '9px',
+              letterSpacing: '0.1em',
+              color: isHigh ? 'var(--accent-red)' : 'var(--accent-amber)',
+            }}>
+              {isHigh ? 'HIGH' : 'MED'}
+            </span>
+          </div>
+        );
+      })}
+    </div>
   );
 }
 
 function HeatmapCalendar() {
+  const theme = useTheme();
   const [data, setData] = useState<DayScore[] | null>(null);
+  const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedDay, setSelectedDay] = useState<DayScore | null>(null);
-  const [monthIndex, setMonthIndex] = useState(-1); // -1 = not set yet, will default to last month
+  const [monthIndex, setMonthIndex] = useState(-1);
 
   useEffect(() => {
     let cancelled = false;
     async function load() {
       try {
-        const res = await fetch('/api/history', { cache: 'no-store' });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const json: HistoryResponse = await res.json();
+        const [hRes, eRes] = await Promise.all([
+          fetch('/api/history', { cache: 'no-store' }),
+          fetch('/api/events').catch(() => null),
+        ]);
+        if (!hRes.ok) throw new Error(`HTTP ${hRes.status}`);
+        const hJson: HistoryResponse = await hRes.json();
         if (!cancelled) {
-          setData(json.days);
+          setData(hJson.days);
           setLoading(false);
+        }
+        if (eRes && eRes.ok) {
+          const eJson: { events: CalendarEvent[] } = await eRes.json();
+          if (!cancelled) setEvents(eJson.events ?? []);
         }
       } catch (e: any) {
         if (!cancelled) {
@@ -259,12 +524,12 @@ function HeatmapCalendar() {
   }, []);
 
   const months = useMemo(() => (data ? groupByMonth(data) : []), [data]);
+  const eventKeys = useMemo(() => new Set(events.map((e) => e.dateKey)), [events]);
+  const todayKey = useMemo(() => todayKeyET(), []);
 
-  // Default to the latest (current) month once data loads
   const currentMonthIdx = monthIndex < 0 ? months.length - 1 : monthIndex;
   const currentMonth = months[currentMonthIdx] ?? null;
 
-  // Sync monthIndex when data first loads
   useEffect(() => {
     if (months.length > 0 && monthIndex < 0) {
       setMonthIndex(months.length - 1);
@@ -275,14 +540,14 @@ function HeatmapCalendar() {
     if (day.marketOpen) setSelectedDay(day);
   }, []);
 
-  const goPrev = useCallback(() => setMonthIndex((i) => Math.max(0, i - 1)), []);
-  const goNext = useCallback(() => setMonthIndex((i) => Math.min(months.length - 1, i + 1)), [months.length]);
+  const goPrev = useCallback(() => setMonthIndex((i) => Math.max(0, (i < 0 ? months.length - 1 : i) - 1)), [months.length]);
+  const goNext = useCallback(() => setMonthIndex((i) => Math.min(months.length - 1, (i < 0 ? months.length - 1 : i) + 1)), [months.length]);
 
   if (loading) return <CalendarSkeleton />;
 
   if (error) {
     return (
-      <div className="bg-bg-secondary rounded-2xl p-6">
+      <div style={{ padding: '16px', borderTop: '1px solid var(--text-primary)' }}>
         <p className="text-sm text-accent-red font-display">데이터 로딩 실패: {error}</p>
       </div>
     );
@@ -291,99 +556,22 @@ function HeatmapCalendar() {
   if (!currentMonth) return null;
 
   return (
-    <div className="space-y-4 opacity-0 animate-fade-in">
-      {/* History line chart */}
+    <div className="opacity-0 animate-fade-in" style={{ borderTop: '1px solid var(--text-primary)' }}>
       {data && <HistoryLineChart data={data} />}
+      <ScoreLevelsLegend />
+      <CalendarGrid
+        month={currentMonth}
+        currentMonthIdx={currentMonthIdx}
+        totalMonths={months.length}
+        eventKeys={eventKeys}
+        todayKey={todayKey}
+        theme={theme}
+        onPrev={goPrev}
+        onNext={goNext}
+        onDayClick={handleDayClick}
+      />
+      <EventsList events={events} />
 
-      {/* Legend */}
-      <div className="bg-bg-secondary rounded-2xl p-4 card-hover">
-        <div className="flex items-center justify-between mb-2">
-          <h3 className="font-display text-sm font-medium text-text-secondary tracking-wider uppercase">시장 히트맵</h3>
-          <span className="text-[10px] text-text-dim font-display">최근 3개월</span>
-        </div>
-        <div className="flex items-center gap-1">
-          {SCORE_LEVELS.map((l) => (
-            <div key={l.label} className="flex-1 flex flex-col items-center gap-1">
-              <div
-                className="w-full h-3 rounded-sm"
-                style={{ backgroundColor: l.color }}
-              />
-              <span className="text-[9px] text-text-dim font-display">{l.label}</span>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Single month with navigation */}
-      <div className="bg-bg-secondary rounded-2xl p-4 card-hover">
-        {/* Month header with arrows */}
-        <div className="flex items-center justify-between mb-4">
-          <NavButton direction="prev" disabled={currentMonthIdx <= 0} onClick={goPrev} />
-          <h3 className="font-display text-sm font-medium text-text-primary">{currentMonth.label}</h3>
-          <NavButton direction="next" disabled={currentMonthIdx >= months.length - 1} onClick={goNext} />
-        </div>
-
-        {/* Day headers */}
-        <div className="grid grid-cols-7 gap-1 mb-1">
-          {DAY_HEADERS.map((d) => (
-            <div key={d} className="text-center text-[10px] text-text-dim font-display py-0.5">
-              {d}
-            </div>
-          ))}
-        </div>
-
-        {/* Day cells */}
-        <div className="grid grid-cols-7 gap-1">
-          {currentMonth.days.map((day, idx) => {
-            if (!day) {
-              return <div key={`empty-${idx}`} className="aspect-square" />;
-            }
-
-            const dateNum = parseInt(day.date.split('-')[2], 10);
-
-            if (!day.marketOpen) {
-              return (
-                <div
-                  key={day.date}
-                  className="aspect-square rounded-lg bg-bg-tertiary opacity-30 flex items-center justify-center"
-                >
-                  <span className="text-[10px] text-text-dim font-display">{dateNum}</span>
-                </div>
-              );
-            }
-
-            const level = getScoreLevel(day.composite);
-            return (
-              <button
-                key={day.date}
-                onClick={() => handleDayClick(day)}
-                className="aspect-square rounded-lg flex items-center justify-center transition-transform active:scale-90 hover:ring-2 hover:ring-white/20"
-                style={{ backgroundColor: level.color }}
-                title={`${day.date}: ${day.composite}°`}
-              >
-                <span className="text-[10px] font-display font-medium text-white/90 drop-shadow-sm">
-                  {dateNum}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-
-        {/* Page dots */}
-        <div className="flex items-center justify-center gap-1.5 mt-4">
-          {months.map((_, i) => (
-            <button
-              key={i}
-              onClick={() => setMonthIndex(i)}
-              className={`w-1.5 h-1.5 rounded-full transition-colors ${
-                i === currentMonthIdx ? 'bg-accent-green' : 'bg-bg-tertiary'
-              }`}
-            />
-          ))}
-        </div>
-      </div>
-
-      {/* Day detail modal — portal to body so it escapes overflow-hidden swipe track */}
       {selectedDay && createPortal(
         <DayDetail day={selectedDay} onClose={() => setSelectedDay(null)} />,
         document.body,

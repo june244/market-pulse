@@ -98,33 +98,59 @@ export default function TradeManager({ symbol, currentPrice, trades, onAddTrade,
         <button
           type="button"
           onClick={() => setShowForm(true)}
-          className="w-full py-2 rounded-lg border border-dashed border-bg-tertiary text-xs font-display font-medium text-text-secondary hover:border-accent-blue/40 hover:text-accent-blue transition-colors"
+          style={{
+            width: '100%',
+            padding: '8px',
+            border: '1px dashed var(--bg-tertiary)',
+            background: 'transparent',
+            color: 'var(--text-secondary)',
+            fontFamily: 'JetBrains Mono, monospace',
+            fontSize: '9px',
+            letterSpacing: '0.15em',
+            textTransform: 'uppercase',
+            cursor: 'pointer',
+          }}
         >
           + 거래 추가
         </button>
       ) : (
-        <div className="space-y-2 bg-bg-primary/50 rounded-lg p-3">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', padding: '10px', border: '1px solid var(--bg-tertiary)' }}>
           {/* Buy/Sell toggle */}
-          <div className="flex rounded-lg overflow-hidden border border-bg-tertiary">
+          <div style={{ display: 'flex', border: '1px solid var(--bg-tertiary)' }}>
             <button
               type="button"
               onClick={() => setTradeType('buy')}
-              className={`flex-1 py-1.5 text-xs font-display font-semibold transition-colors ${
-                tradeType === 'buy'
-                  ? 'bg-accent-green/20 text-accent-green'
-                  : 'text-text-secondary hover:bg-bg-tertiary/30'
-              }`}
+              style={{
+                flex: 1,
+                padding: '6px',
+                border: 'none',
+                background: tradeType === 'buy' ? 'var(--accent-green)' : 'transparent',
+                color: tradeType === 'buy' ? 'var(--bg-primary)' : 'var(--text-secondary)',
+                fontFamily: 'JetBrains Mono, monospace',
+                fontSize: '9px',
+                letterSpacing: '0.12em',
+                textTransform: 'uppercase',
+                cursor: 'pointer',
+                borderRight: '1px solid var(--bg-tertiary)',
+              }}
             >
               매수
             </button>
             <button
               type="button"
               onClick={() => setTradeType('sell')}
-              className={`flex-1 py-1.5 text-xs font-display font-semibold transition-colors ${
-                tradeType === 'sell'
-                  ? 'bg-accent-red/20 text-accent-red'
-                  : 'text-text-secondary hover:bg-bg-tertiary/30'
-              }`}
+              style={{
+                flex: 1,
+                padding: '6px',
+                border: 'none',
+                background: tradeType === 'sell' ? 'var(--accent-red)' : 'transparent',
+                color: tradeType === 'sell' ? 'var(--bg-primary)' : 'var(--text-secondary)',
+                fontFamily: 'JetBrains Mono, monospace',
+                fontSize: '9px',
+                letterSpacing: '0.12em',
+                textTransform: 'uppercase',
+                cursor: 'pointer',
+              }}
             >
               매도
             </button>
@@ -135,13 +161,26 @@ export default function TradeManager({ symbol, currentPrice, trades, onAddTrade,
             type="date"
             value={date}
             onChange={(e) => setDate(e.target.value)}
-            className="w-full px-2 py-1.5 rounded-md bg-bg-primary border border-bg-tertiary text-sm font-display text-text-primary focus:outline-none focus:border-accent-blue/50 transition-colors"
+            style={{
+              width: '100%',
+              padding: '6px 8px',
+              border: '1px solid var(--bg-tertiary)',
+              background: 'transparent',
+              color: 'var(--text-primary)',
+              fontFamily: 'JetBrains Mono, monospace',
+              fontSize: '11px',
+              outline: 'none',
+            }}
           />
 
           {/* Price + Quantity */}
-          <div className="flex gap-2">
-            <div className="relative flex-1">
-              <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-text-dim font-display">$</span>
+          <div style={{ display: 'flex', gap: '6px' }}>
+            <div style={{ position: 'relative', flex: 1 }}>
+              <span style={{
+                position: 'absolute', left: '8px', top: '50%', transform: 'translateY(-50%)',
+                fontFamily: 'JetBrains Mono, monospace', fontSize: '10px',
+                color: 'var(--text-secondary)',
+              }}>$</span>
               <input
                 type="number"
                 inputMode="decimal"
@@ -149,35 +188,76 @@ export default function TradeManager({ symbol, currentPrice, trades, onAddTrade,
                 placeholder="가격"
                 value={price}
                 onChange={(e) => setPrice(e.target.value)}
-                className="w-full pl-5 pr-2 py-1.5 rounded-md bg-bg-primary border border-bg-tertiary text-sm font-display text-text-primary placeholder:text-text-dim/50 focus:outline-none focus:border-accent-blue/50 transition-colors"
+                style={{
+                  width: '100%',
+                  paddingLeft: '20px',
+                  paddingRight: '8px',
+                  paddingTop: '6px',
+                  paddingBottom: '6px',
+                  border: '1px solid var(--bg-tertiary)',
+                  background: 'transparent',
+                  color: 'var(--text-primary)',
+                  fontFamily: 'JetBrains Mono, monospace',
+                  fontSize: '11px',
+                  outline: 'none',
+                }}
               />
             </div>
-            <div className="relative flex-1">
-              <input
-                type="number"
-                inputMode="decimal"
-                step="any"
-                placeholder="수량"
-                value={quantity}
-                onChange={(e) => setQuantity(e.target.value)}
-                className="w-full px-2 py-1.5 rounded-md bg-bg-primary border border-bg-tertiary text-sm font-display text-text-primary placeholder:text-text-dim/50 focus:outline-none focus:border-accent-blue/50 transition-colors"
-              />
-            </div>
+            <input
+              type="number"
+              inputMode="decimal"
+              step="any"
+              placeholder="수량"
+              value={quantity}
+              onChange={(e) => setQuantity(e.target.value)}
+              style={{
+                flex: 1,
+                padding: '6px 8px',
+                border: '1px solid var(--bg-tertiary)',
+                background: 'transparent',
+                color: 'var(--text-primary)',
+                fontFamily: 'JetBrains Mono, monospace',
+                fontSize: '11px',
+                outline: 'none',
+              }}
+            />
           </div>
 
           {/* Save / Cancel */}
-          <div className="flex gap-2">
+          <div style={{ display: 'flex', gap: '6px' }}>
             <button
               type="button"
               onClick={handleSave}
-              className="flex-1 py-1.5 rounded-lg bg-accent-blue text-white text-xs font-display font-semibold hover:bg-accent-blue/80 transition-colors"
+              style={{
+                flex: 1,
+                padding: '7px',
+                border: '1px solid var(--text-primary)',
+                background: 'var(--text-primary)',
+                color: 'var(--bg-primary)',
+                fontFamily: 'JetBrains Mono, monospace',
+                fontSize: '9px',
+                letterSpacing: '0.12em',
+                textTransform: 'uppercase',
+                cursor: 'pointer',
+              }}
             >
               저장
             </button>
             <button
               type="button"
               onClick={handleCancel}
-              className="flex-1 py-1.5 rounded-lg bg-bg-tertiary text-text-secondary text-xs font-display font-semibold hover:bg-bg-tertiary/80 transition-colors"
+              style={{
+                flex: 1,
+                padding: '7px',
+                border: '1px solid var(--bg-tertiary)',
+                background: 'transparent',
+                color: 'var(--text-secondary)',
+                fontFamily: 'JetBrains Mono, monospace',
+                fontSize: '9px',
+                letterSpacing: '0.12em',
+                textTransform: 'uppercase',
+                cursor: 'pointer',
+              }}
             >
               취소
             </button>

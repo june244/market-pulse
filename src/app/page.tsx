@@ -71,7 +71,7 @@ export default function Home() {
   const [lastRefresh, setLastRefresh] = useState<string>('');
   const [activeTab, setActiveTab] = useState<Tab>('dashboard');
   const [refreshKey, setRefreshKey] = useState(0);
-  const [theme, setTheme] = useState<Theme>('dark');
+  const [theme, setTheme] = useState<Theme>('nordic');
   const [shakeToast, setShakeToast] = useState(false);
   const [roastOpen, setRoastOpen] = useState(false);
   const [roastCostBasis, setRoastCostBasis] = useState<Record<string, number>>({});
@@ -82,9 +82,7 @@ export default function Home() {
     setTickers(loadTickers());
     const savedTheme = loadTheme();
     setTheme(savedTheme);
-    if (savedTheme !== 'dark') {
-      document.documentElement.dataset.theme = savedTheme;
-    }
+    document.documentElement.dataset.theme = savedTheme;
   }, []);
 
   const fetchData = useCallback(async () => {
@@ -140,11 +138,7 @@ export default function Home() {
   const handleThemeChange = useCallback((newTheme: Theme) => {
     setTheme(newTheme);
     saveTheme(newTheme);
-    if (newTheme === 'dark') {
-      delete document.documentElement.dataset.theme;
-    } else {
-      document.documentElement.dataset.theme = newTheme;
-    }
+    document.documentElement.dataset.theme = newTheme;
   }, []);
 
   const handleTickerUpdate = useCallback((newTickers: string[]) => {
@@ -350,119 +344,79 @@ export default function Home() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }, [tabIndex]);
 
-  const isNordicTheme = theme === 'nordic' || theme === 'nordic-light';
-
   return (
     <main className="relative z-10 min-h-screen px-4 py-6 pb-20 md:pb-6 max-w-5xl mx-auto">
       {/* Header */}
-      {isNordicTheme ? (
-        <header
-          className="relative z-[100] mb-6 opacity-0 animate-fade-in"
-          style={{ borderBottom: '1px solid var(--text-primary)', paddingBottom: '10px' }}
-        >
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              {/* Nordic logo mark */}
-              <div
-                onClick={handleHeaderTap}
-                className="cursor-pointer select-none"
-                style={{ position: 'relative', width: '12px', height: '12px' }}
-              >
-                <div style={{
-                  position: 'absolute', inset: 0,
-                  border: '1px solid var(--text-primary)',
-                  borderRadius: '50%',
-                }} />
-                <div style={{
-                  position: 'absolute', top: '3px', left: '3px',
-                  width: '4px', height: '4px',
-                  background: 'var(--text-primary)',
-                  borderRadius: '50%',
-                }} />
-              </div>
-              <span
-                onClick={handleHeaderTap}
-                className="cursor-pointer select-none"
-                style={{
-                  fontFamily: 'JetBrains Mono, monospace',
-                  fontSize: '9px',
-                  letterSpacing: '0.22em',
-                  textTransform: 'uppercase',
-                  color: 'var(--text-secondary)',
-                }}
-              >
-                Market Pulse
-              </span>
-            </div>
-            <div className="flex items-center gap-2">
-              {lastRefresh && (
-                <span style={{
-                  fontFamily: 'JetBrains Mono, monospace',
-                  fontSize: '8px',
-                  letterSpacing: '0.12em',
-                  color: 'var(--text-secondary)',
-                }}>
-                  {lastRefresh}
-                </span>
-              )}
-              <button
-                onClick={() => { setLoading(true); fetchData(); setRefreshKey((k) => k + 1); }}
-                style={{
-                  background: 'transparent',
-                  border: '1px solid var(--text-secondary)',
-                  padding: '4px 8px',
-                  color: 'var(--text-secondary)',
-                  cursor: 'pointer',
-                  fontFamily: 'JetBrains Mono, monospace',
-                  fontSize: '8px',
-                  letterSpacing: '0.12em',
-                  textTransform: 'uppercase',
-                }}
-                title="새로고침"
-              >
-                ↺
-              </button>
-              <ThemePicker current={theme} onChange={handleThemeChange} />
-              <TickerEditor tickers={tickers} onUpdate={handleTickerUpdate} />
-            </div>
-          </div>
-        </header>
-      ) : (
-        <header className="relative z-[100] flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-8 opacity-0 animate-fade-in">
-          <div>
-            <h1 onClick={handleHeaderTap} className="font-display text-2xl font-bold tracking-tight text-text-primary flex items-center gap-2 cursor-pointer select-none">
-              <span
-                className="inline-block w-2 h-2 rounded-full bg-accent-green animate-pulse-slow"
-                style={{ boxShadow: '0 0 8px rgba(0,255,135,0.5)' }}
-              />
-              Market Pulse
-            </h1>
-            <p className="text-xs text-text-dim mt-1 font-display">
-              시장 심리 대시보드 · Fear &amp; Greed · VIX · Watchlist
-            </p>
-          </div>
-
+      <header
+        className="relative z-[100] mb-6 opacity-0 animate-fade-in"
+        style={{ borderBottom: '1px solid var(--text-primary)', paddingBottom: '10px' }}
+      >
+        <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
+            <div
+              onClick={handleHeaderTap}
+              className="cursor-pointer select-none"
+              style={{ position: 'relative', width: '12px', height: '12px' }}
+            >
+              <div style={{
+                position: 'absolute', inset: 0,
+                border: '1px solid var(--text-primary)',
+                borderRadius: '50%',
+              }} />
+              <div style={{
+                position: 'absolute', top: '3px', left: '3px',
+                width: '4px', height: '4px',
+                background: 'var(--text-primary)',
+                borderRadius: '50%',
+              }} />
+            </div>
+            <span
+              onClick={handleHeaderTap}
+              className="cursor-pointer select-none"
+              style={{
+                fontFamily: 'JetBrains Mono, monospace',
+                fontSize: '9px',
+                letterSpacing: '0.22em',
+                textTransform: 'uppercase',
+                color: 'var(--text-secondary)',
+              }}
+            >
+              Market Pulse
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
             {lastRefresh && (
-              <span className="text-[10px] text-text-dim font-display">
-                마지막 갱신: {lastRefresh}
+              <span style={{
+                fontFamily: 'JetBrains Mono, monospace',
+                fontSize: '8px',
+                letterSpacing: '0.12em',
+                color: 'var(--text-secondary)',
+              }}>
+                {lastRefresh}
               </span>
             )}
             <button
               onClick={() => { setLoading(true); fetchData(); setRefreshKey((k) => k + 1); }}
-              className="p-2 rounded-lg bg-bg-tertiary hover:bg-bg-tertiary/80 transition-colors text-text-secondary"
+              style={{
+                background: 'transparent',
+                border: '1px solid var(--text-secondary)',
+                padding: '4px 8px',
+                color: 'var(--text-secondary)',
+                cursor: 'pointer',
+                fontFamily: 'JetBrains Mono, monospace',
+                fontSize: '8px',
+                letterSpacing: '0.12em',
+                textTransform: 'uppercase',
+              }}
               title="새로고침"
             >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M21 12a9 9 0 11-9-9c2.52 0 4.93 1 6.74 2.74L21 8" />
-                <path d="M21 3v5h-5" />
-              </svg>
+              ↺
             </button>
             <ThemePicker current={theme} onChange={handleThemeChange} />
             <TickerEditor tickers={tickers} onUpdate={handleTickerUpdate} />
           </div>
-        </header>
-      )}
+        </div>
+      </header>
 
       {/* Shake-to-refresh toast */}
       {shakeToast && (
@@ -495,25 +449,10 @@ export default function Home() {
         >
           {/* Tab 0: Dashboard */}
           <div className="w-full flex-shrink-0 px-4">
-            {isNordicTheme ? (
-              <>
-                <FearGreedGauge data={fearGreedData} loading={loading} />
-                <VIXCard data={vixData} loading={loading} />
-                <MarketThermometer fearGreed={fearGreedData} vix={vixData} macro={macroData} loading={loading} />
-                <MacroDashboard macro={macroData} loading={loading} />
-              </>
-            ) : (
-              <>
-                <div className="grid grid-cols-2 gap-3 mb-4">
-                  <FearGreedGauge data={fearGreedData} loading={loading} />
-                  <VIXCard data={vixData} loading={loading} />
-                </div>
-                <div className="my-4">
-                  <MarketThermometer fearGreed={fearGreedData} vix={vixData} macro={macroData} loading={loading} />
-                </div>
-                <MacroDashboard macro={macroData} loading={loading} />
-              </>
-            )}
+            <FearGreedGauge data={fearGreedData} loading={loading} />
+            <VIXCard data={vixData} loading={loading} />
+            <MarketThermometer fearGreed={fearGreedData} vix={vixData} macro={macroData} loading={loading} />
+            <MacroDashboard macro={macroData} loading={loading} />
           </div>
           {/* Tab 1: Coin */}
           <div className="w-full flex-shrink-0 px-4">
@@ -532,23 +471,10 @@ export default function Home() {
 
       {/* ── Desktop: all content visible (no tabs) ── */}
       <div className="hidden md:block">
-        {isNordicTheme ? (
-          <>
-            <FearGreedGauge data={fearGreedData} loading={loading} />
-            <VIXCard data={vixData} loading={loading} />
-            <MarketThermometer fearGreed={fearGreedData} vix={vixData} macro={macroData} loading={loading} />
-            <MacroDashboard macro={macroData} loading={loading} />
-          </>
-        ) : (
-          <>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-              <FearGreedGauge data={fearGreedData} loading={loading} />
-              <VIXCard data={vixData} loading={loading} />
-            </div>
-            <MarketThermometer fearGreed={fearGreedData} vix={vixData} macro={macroData} loading={loading} />
-            <MacroDashboard macro={macroData} loading={loading} />
-          </>
-        )}
+        <FearGreedGauge data={fearGreedData} loading={loading} />
+        <VIXCard data={vixData} loading={loading} />
+        <MarketThermometer fearGreed={fearGreedData} vix={vixData} macro={macroData} loading={loading} />
+        <MacroDashboard macro={macroData} loading={loading} />
         <CoinTab refreshKey={refreshKey} />
         <div className="mt-4">
           <TickerTable tickers={tickersData} loading={loading} tickerOrder={tickers} onReorder={handleTickerUpdate} onDelete={handleDeleteTicker} />
