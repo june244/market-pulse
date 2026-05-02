@@ -56,7 +56,12 @@ async function fetchFearGreedHistory(): Promise<Map<string, number>> {
     const data = await res.json();
     const points: { x: number; y: number }[] = data?.fear_and_greed_historical?.data ?? [];
     for (const pt of points) {
-      const date = new Date(pt.x).toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+      // CNN sends each daily score with timestamp at UTC midnight of the trading day.
+      // Converting to ET via toLocaleDateString shifts the date one day back
+      // (UTC midnight = previous day 19-20:00 ET), which causes Friday to drop out
+      // of the heatmap entirely (its data lands on Thursday and Saturday isn't a trading day).
+      // Use the UTC date components directly to preserve the intended trading day.
+      const date = new Date(pt.x).toISOString().slice(0, 10);
       map.set(date, Math.round(pt.y));
     }
   } catch (e) {

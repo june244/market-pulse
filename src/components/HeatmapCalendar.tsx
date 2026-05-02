@@ -2,9 +2,17 @@
 
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { DayScore, HistoryResponse } from '@/lib/types';
-import { getScoreLevel, getScoreLevels } from '@/lib/utils';
+import { DayScore, HistoryResponse, Trade } from '@/lib/types';
+import { getScoreLevel, getScoreLevels, loadTrades } from '@/lib/utils';
 import { useTheme } from '@/hooks/useTheme';
+
+interface PortfolioPoint {
+  date: string;
+  value: number;
+  invested: number;
+  plPercent: number;
+  plAmount: number;
+}
 
 const DOW_HEADERS = ['MO', 'TU', 'WE', 'TH', 'FR', 'SA', 'SU'];
 const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
@@ -236,6 +244,96 @@ function HistoryLineChart({ data }: { data: DayScore[] }) {
         {visibleLabels.map((l) => (
           <span key={`${l.idx}-${l.label}`}>{l.label}</span>
         ))}
+      </div>
+    </div>
+  );
+}
+
+// ── Portfolio Return chart (overlay on temperature axis) ──
+function PortfolioReturnChart({ points }: { points: PortfolioPoint[] }) {
+  if (points.length < 2) return null;
+
+  const W = 300;
+  const H = 50;
+
+  const lastPL = points[points.length - 1].plPercent;
+  // Auto-scale to data range with mild padding
+  const plValues = points.map((p) => p.plPercent);
+  const minPL = Math.min(...plValues, 0);
+  const maxPL = Math.max(...plValues, 0);
+  const span = Math.max(2, maxPL - minPL);
+  const padTop = span * 0.1;
+  const padBot = span * 0.1;
+  const lo = minPL - padBot;
+  const hi = maxPL + padTop;
+  const range = hi - lo;
+
+  const xScale = (i: number) => (i / (points.length - 1)) * W;
+  const yScale = (v: number) => H - ((v - lo) / range) * H;
+
+  const linePath = points
+    .map((p, i) => `${i === 0 ? 'M' : 'L'}${xScale(i).toFixed(1)},${yScale(p.plPercent).toFixed(1)}`)
+    .join(' ');
+
+  // Area to baseline (zero) when zero is within range; else to bottom
+  const zeroY = lo <= 0 && hi >= 0 ? yScale(0) : H;
+  const areaPath = `${linePath} L${W},${zeroY} L0,${zeroY} Z`;
+
+  const isUp = lastPL >= 0;
+  const lineColor = isUp ? 'var(--accent-green)' : 'var(--accent-red)';
+
+  return (
+    <div style={{ padding: '10px 16px', borderBottom: '1px solid var(--text-primary)' }}>
+      <div
+        style={{
+          fontFamily: 'JetBrains Mono, monospace',
+          fontSize: '9px',
+          letterSpacing: '0.18em',
+          textTransform: 'uppercase',
+          color: 'var(--text-secondary)',
+          marginBottom: '6px',
+          display: 'flex',
+          justifyContent: 'space-between',
+        }}
+      >
+        <span>Portfolio Return · 90D</span>
+        <span style={{ color: lineColor }}>
+          {isUp ? '+' : ''}{lastPL.toFixed(2)}%
+        </span>
+      </div>
+      <svg
+        viewBox={`0 0 ${W} ${H}`}
+        width="100%"
+        height="50"
+        preserveAspectRatio="none"
+        style={{ display: 'block' }}
+      >
+        {/* Zero baseline */}
+        {lo <= 0 && hi >= 0 && (
+          <line
+            x1={0} y1={zeroY} x2={W} y2={zeroY}
+            stroke="currentColor"
+            strokeOpacity="0.18"
+            strokeWidth="0.8"
+            strokeDasharray="2 2"
+          />
+        )}
+        <path d={areaPath} fill={lineColor} fillOpacity="0.12" />
+        <path d={linePath} fill="none" stroke={lineColor} strokeWidth="1.5" strokeLinejoin="round" />
+        <circle cx={xScale(points.length - 1)} cy={yScale(lastPL)} r="3" fill={lineColor} />
+      </svg>
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          fontFamily: 'JetBrains Mono, monospace',
+          fontSize: '8px',
+          color: 'var(--text-secondary)',
+          marginTop: '3px',
+        }}
+      >
+        <span>{points[0].date.slice(5).replace('-', '/')}</span>
+        <span>{points[points.length - 1].date.slice(5).replace('-', '/')}</span>
       </div>
     </div>
   );
@@ -489,6 +587,7 @@ function HeatmapCalendar() {
   const theme = useTheme();
   const [data, setData] = useState<DayScore[] | null>(null);
   const [events, setEvents] = useState<CalendarEvent[]>([]);
+  const [portfolioPoints, setPortfolioPoints] = useState<PortfolioPoint[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedDay, setSelectedDay] = useState<DayScore | null>(null);
@@ -517,6 +616,23 @@ function HeatmapCalendar() {
           setError(e.message);
           setLoading(false);
         }
+      }
+
+      // Portfolio P/L history (only when user has trades)
+      try {
+        const trades: Record<string, Trade[]> = loadTrades();
+        const hasTrades = Object.values(trades).some((arr) => Array.isArray(arr) && arr.length > 0);
+        if (!hasTrades) return;
+        const pRes = await fetch('/api/portfolio-history', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ trades }),
+        });
+        if (!pRes.ok) return;
+        const pJson: { points: PortfolioPoint[] } = await pRes.json();
+        if (!cancelled) setPortfolioPoints((pJson.points ?? []).slice(-90));
+      } catch {
+        // Non-critical; ignore
       }
     }
     load();
@@ -558,6 +674,7 @@ function HeatmapCalendar() {
   return (
     <div className="opacity-0 animate-fade-in" style={{ borderTop: '1px solid var(--text-primary)' }}>
       {data && <HistoryLineChart data={data} />}
+      {portfolioPoints.length >= 2 && <PortfolioReturnChart points={portfolioPoints} />}
       <ScoreLevelsLegend />
       <CalendarGrid
         month={currentMonth}
