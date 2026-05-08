@@ -4,6 +4,34 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { TickerData, Trade } from '@/lib/types';
 import { formatNumber, formatVolume, formatMarketCap, loadTrades, saveTrades, calcPosition } from '@/lib/utils';
 import TradeManager from './TradeManager';
+import SentimentHistoryModal from './SentimentHistoryModal';
+
+interface RedditPost {
+  title: string;
+  url: string;
+  score: number;
+  numComments: number;
+  subreddit: string;
+  createdUtc: number;
+}
+
+interface AnalystConsensus {
+  strongBuy: number;
+  buy: number;
+  hold: number;
+  sell: number;
+  strongSell: number;
+  total: number;
+  mean: number | null;
+  key: string | null;
+}
+
+interface SentimentEntry {
+  symbol: string;
+  analyst: AnalystConsensus | null;
+  reddit: { mentions: number; scoreSum: number; topPosts: RedditPost[] } | null;
+  fetchedAt: string;
+}
 
 const PERIOD_KEYS = ['1M', '3M', '6M', '1Y'] as const;
 const SWIPE_THRESHOLD = 80;
@@ -52,6 +80,220 @@ const DonutChart = React.memo(function DonutChart({
     </svg>
   );
 });
+
+// Analyst recommendationKey → "BUY"/"HOLD"/"SELL" + accent color
+function analystLabel(a: AnalystConsensus): { label: string; color: string } | null {
+  if (a.total === 0 && a.mean == null) return null;
+  const m = a.mean;
+  if (m != null) {
+    if (m <= 1.8) return { label: 'STRONG BUY', color: 'var(--accent-green)' };
+    if (m <= 2.5) return { label: 'BUY', color: 'var(--accent-green)' };
+    if (m <= 3.4) return { label: 'HOLD', color: 'var(--accent-amber)' };
+    if (m <= 4.2) return { label: 'SELL', color: 'var(--accent-red)' };
+    return { label: 'STRONG SELL', color: 'var(--accent-red)' };
+  }
+  // Fallback: derive from counts
+  const bull = a.strongBuy + a.buy;
+  const bear = a.sell + a.strongSell;
+  if (bull > bear * 1.5) return { label: 'BUY', color: 'var(--accent-green)' };
+  if (bear > bull * 1.5) return { label: 'SELL', color: 'var(--accent-red)' };
+  return { label: 'HOLD', color: 'var(--accent-amber)' };
+}
+
+// ── Compact analyst-vibe badge for collapsed row ──
+function SentimentBadge({ entry }: { entry?: SentimentEntry }) {
+  if (!entry?.analyst) return null;
+  const label = analystLabel(entry.analyst);
+  if (!label) return null;
+  return (
+    <span
+      style={{
+        marginLeft: '6px',
+        fontFamily: 'JetBrains Mono, monospace',
+        fontSize: '8px',
+        letterSpacing: '0.1em',
+        color: label.color,
+      }}
+    >
+      · {label.label}
+    </span>
+  );
+}
+
+function relativeAge(unixSec: number): string {
+  const diffMin = Math.max(0, (Date.now() / 1000 - unixSec) / 60);
+  if (diffMin < 60) return `${Math.round(diffMin)}m`;
+  const diffH = diffMin / 60;
+  if (diffH < 24) return `${Math.round(diffH)}h`;
+  return `${Math.round(diffH / 24)}d`;
+}
+
+// ── Full sentiment panel for expanded row ──
+function SentimentPanel({
+  entry, onOpenHistory,
+}: {
+  entry?: SentimentEntry;
+  onOpenHistory?: () => void;
+}) {
+  if (!entry) return null;
+  const an = entry.analyst;
+  const rd = entry.reddit;
+  const hasAny = (an && (an.total > 0 || an.mean != null)) || (rd && rd.mentions > 0);
+  if (!hasAny) return null;
+
+  const fetchedAge = entry.fetchedAt ? relativeAge(new Date(entry.fetchedAt).getTime() / 1000) : '?';
+
+  return (
+    <div style={{ paddingTop: '12px', borderTop: '1px solid var(--bg-tertiary)' }}>
+      <button
+        type="button"
+        onClick={(e) => { e.stopPropagation(); onOpenHistory?.(); }}
+        style={{
+          width: '100%',
+          background: 'transparent',
+          border: 'none',
+          padding: 0,
+          cursor: onOpenHistory ? 'pointer' : 'default',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          fontFamily: 'JetBrains Mono, monospace',
+          fontSize: '9px',
+          letterSpacing: '0.18em',
+          textTransform: 'uppercase',
+          color: 'var(--text-secondary)',
+          marginBottom: '8px',
+        }}
+      >
+        <span>Sentiment · 24h</span>
+        <span>
+          updated {fetchedAge} ago
+          {onOpenHistory && <span style={{ marginLeft: '6px', color: 'var(--text-primary)' }}>view ›</span>}
+        </span>
+      </button>
+
+      {an && an.total > 0 && (() => {
+        const bull = an.strongBuy + an.buy;
+        const hold = an.hold;
+        const bear = an.sell + an.strongSell;
+        const total = bull + hold + bear || 1;
+        const bullPct = (bull / total) * 100;
+        const holdPct = (hold / total) * 100;
+        const bearPct = (bear / total) * 100;
+        const lab = analystLabel(an);
+        return (
+          <div style={{ marginBottom: '12px' }}>
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                fontFamily: 'JetBrains Mono, monospace',
+                fontSize: '9px',
+                color: 'var(--text-secondary)',
+                marginBottom: '4px',
+              }}
+            >
+              <span>Analysts · {an.total} ratings</span>
+              <span>
+                <span style={{ color: 'var(--accent-green)' }}>BUY {bull}</span>
+                {' / '}
+                <span style={{ color: 'var(--accent-amber)' }}>HOLD {hold}</span>
+                {' / '}
+                <span style={{ color: 'var(--accent-red)' }}>SELL {bear}</span>
+              </span>
+            </div>
+            <div style={{ display: 'flex', height: '6px', background: 'var(--bg-tertiary)' }}>
+              <div style={{ width: `${bullPct}%`, background: 'var(--accent-green)' }} />
+              <div style={{ width: `${holdPct}%`, background: 'var(--accent-amber)' }} />
+              <div style={{ width: `${bearPct}%`, background: 'var(--accent-red)' }} />
+            </div>
+            {lab && an.mean != null && (
+              <div
+                style={{
+                  marginTop: '4px',
+                  fontFamily: 'JetBrains Mono, monospace',
+                  fontSize: '9px',
+                  color: lab.color,
+                  letterSpacing: '0.1em',
+                }}
+              >
+                {lab.label} · mean {an.mean.toFixed(2)}/5
+              </div>
+            )}
+          </div>
+        );
+      })()}
+
+      {rd && rd.mentions > 0 && (
+        <div>
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              fontFamily: 'JetBrains Mono, monospace',
+              fontSize: '9px',
+              color: 'var(--text-secondary)',
+              marginBottom: '6px',
+            }}
+          >
+            <span>Reddit</span>
+            <span>{rd.mentions} mentions · {rd.scoreSum.toLocaleString()} upvotes</span>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+            {rd.topPosts.slice(0, 4).map((p) => (
+              <a
+                key={p.url}
+                href={p.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={(e) => e.stopPropagation()}
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'auto auto 1fr',
+                  gap: '8px',
+                  alignItems: 'baseline',
+                  fontFamily: "'Inter Tight', sans-serif",
+                  fontSize: '11px',
+                  color: 'var(--text-primary)',
+                  textDecoration: 'none',
+                  padding: '4px 0',
+                  borderBottom: '1px solid var(--bg-tertiary)',
+                }}
+              >
+                <span
+                  style={{
+                    fontFamily: 'JetBrains Mono, monospace',
+                    fontSize: '8px',
+                    color: 'var(--text-secondary)',
+                    letterSpacing: '0.08em',
+                    minWidth: '64px',
+                  }}
+                >
+                  r/{p.subreddit}
+                </span>
+                <span
+                  style={{
+                    fontFamily: 'JetBrains Mono, monospace',
+                    fontSize: '9px',
+                    color: 'var(--accent-amber)',
+                    minWidth: '36px',
+                  }}
+                >
+                  {p.score >= 0 ? '+' : ''}{p.score.toLocaleString()}
+                </span>
+                <span style={{
+                  whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                }}>
+                  {p.title}
+                </span>
+              </a>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 function splitDecimal(value: number): { int: string; dec: string } {
   const fixed = Math.abs(value).toFixed(2);
@@ -163,6 +405,8 @@ function TickerTable({ tickers, loading, tickerOrder, onReorder, onDelete }: Pro
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [allTrades, setAllTrades] = useState<Record<string, Trade[]>>({});
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+  const [sentiments, setSentiments] = useState<Record<string, SentimentEntry>>({});
+  const [historySymbol, setHistorySymbol] = useState<string | null>(null);
   const celebratedRef = useRef<Set<string>>(new Set());
 
   // Drag state
@@ -179,6 +423,21 @@ function TickerTable({ tickers, loading, tickerOrder, onReorder, onDelete }: Pro
   useEffect(() => {
     setAllTrades(loadTrades());
   }, []);
+
+  // Fetch community sentiment for currently registered tickers (cached server-side 24h)
+  useEffect(() => {
+    if (tickers.length === 0) return;
+    let cancelled = false;
+    const symbols = tickers.map((t) => t.symbol).join(',');
+    fetch(`/api/sentiment?symbols=${encodeURIComponent(symbols)}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j: { data: Record<string, SentimentEntry> } | null) => {
+        if (cancelled || !j?.data) return;
+        setSentiments((prev) => ({ ...prev, ...j.data }));
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [tickers.map((t) => t.symbol).join(',')]);
 
   // Sort tickers based on tickerOrder
   const sortedTickers = useMemo(() => tickerOrder
@@ -838,6 +1097,7 @@ function TickerTable({ tickers, loading, tickerOrder, onReorder, onDelete }: Pro
                           }}
                         >
                           {subText}
+                          <SentimentBadge entry={sentiments[t.symbol]} />
                         </small>
                       </div>
 
@@ -942,6 +1202,12 @@ function TickerTable({ tickers, loading, tickerOrder, onReorder, onDelete }: Pro
                           </div>
                         )}
 
+                        {/* Sentiment panel */}
+                        <SentimentPanel
+                          entry={sentiments[t.symbol]}
+                          onOpenHistory={() => setHistorySymbol(t.symbol)}
+                        />
+
                         {/* Trade manager */}
                         <TradeManager
                           symbol={t.symbol}
@@ -959,6 +1225,13 @@ function TickerTable({ tickers, loading, tickerOrder, onReorder, onDelete }: Pro
           );
         })}
       </div>
+
+      {historySymbol && (
+        <SentimentHistoryModal
+          symbol={historySymbol}
+          onClose={() => setHistorySymbol(null)}
+        />
+      )}
     </div>
   );
 }

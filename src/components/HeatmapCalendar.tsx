@@ -3,7 +3,7 @@
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { DayScore, HistoryResponse, Trade } from '@/lib/types';
-import { getScoreLevel, getScoreLevels, loadTrades } from '@/lib/utils';
+import { getScoreLevel, getScoreLevels, loadTrades, loadTickers } from '@/lib/utils';
 import { useTheme } from '@/hooks/useTheme';
 
 interface PortfolioPoint {
@@ -12,6 +12,17 @@ interface PortfolioPoint {
   invested: number;
   plPercent: number;
   plAmount: number;
+}
+
+type TickerEventType = 'earnings' | 'exDividend' | 'dividend';
+
+interface TickerEvent {
+  symbol: string;
+  type: TickerEventType;
+  date: string;
+  dateKey: string;
+  label: string;
+  estimate?: number | null;
 }
 
 const DOW_HEADERS = ['MO', 'TU', 'WE', 'TH', 'FR', 'SA', 'SU'];
@@ -55,7 +66,22 @@ function groupByMonth(days: DayScore[]): MonthGroup[] {
     const daysInMonth = new Date(y, m, 0).getDate();
     for (let day = 1; day <= daysInMonth; day++) {
       const dateStr = `${y}-${String(m).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-      padded.push(dayMap.get(dateStr) ?? null);
+      const existing = dayMap.get(dateStr);
+      if (existing) {
+        padded.push(existing);
+      } else {
+        // Synthesize placeholder for future / missing dates so the cell still
+        // renders the day number and any matching event dot.
+        padded.push({
+          date: dateStr,
+          composite: 50,
+          fg: null,
+          vix: null,
+          tnxChange: null,
+          dxyChange: null,
+          marketOpen: false,
+        });
+      }
     }
 
     groups.push({ key, year: y, month: m, label, days: padded });
@@ -478,6 +504,17 @@ function CalendarGrid({
             return (
               <div key={day.date} style={{ ...baseStyle, color: 'var(--bg-tertiary)' }}>
                 <span>{dateNum}</span>
+                {hasEvent && (
+                  <span
+                    style={{
+                      width: '3px',
+                      height: '3px',
+                      background: 'var(--accent-amber)',
+                      borderRadius: '50%',
+                      alignSelf: 'flex-end',
+                    }}
+                  />
+                )}
               </div>
             );
           }
@@ -524,28 +561,80 @@ function CalendarGrid({
 }
 
 // ── Events list (n-events) ──
-function EventsList({ events }: { events: CalendarEvent[] }) {
-  if (events.length === 0) return null;
+type CombinedEvent = {
+  key: string;
+  date: string;       // ISO datetime
+  dateKey: string;    // YYYY-MM-DD
+  title: string;
+  badge: string;
+  badgeColor: string;
+  showTime: boolean;
+};
 
-  // Show next ~6 events from now
+function macroToCombined(e: CalendarEvent, idx: number): CombinedEvent {
+  const isHigh = e.impact === 'High';
+  return {
+    key: `m-${e.date}-${idx}`,
+    date: e.date,
+    dateKey: e.dateKey,
+    title: e.title,
+    badge: isHigh ? 'HIGH' : 'MED',
+    badgeColor: isHigh ? 'var(--accent-red)' : 'var(--accent-amber)',
+    showTime: true,
+  };
+}
+
+function tickerToCombined(t: TickerEvent, idx: number): CombinedEvent {
+  let badge = 'EVENT';
+  let color = 'var(--accent-blue)';
+  if (t.type === 'earnings') { badge = 'EARN'; color = 'var(--accent-green)'; }
+  else if (t.type === 'exDividend') { badge = 'EX-DIV'; color = 'var(--accent-amber)'; }
+  else if (t.type === 'dividend') { badge = 'DIV'; color = 'var(--accent-blue)'; }
+  return {
+    key: `t-${t.symbol}-${t.type}-${idx}`,
+    date: t.date,
+    dateKey: t.dateKey,
+    title: t.label,
+    badge,
+    badgeColor: color,
+    showTime: false,
+  };
+}
+
+function EventsList({
+  macroEvents, tickerEvents,
+}: {
+  macroEvents: CalendarEvent[];
+  tickerEvents: TickerEvent[];
+}) {
   const now = Date.now();
-  const upcoming = events
-    .filter((e) => new Date(e.date).getTime() >= now - 6 * 60 * 60 * 1000)
-    .slice(0, 6);
+  const cutoff = now - 6 * 60 * 60 * 1000;
 
+  const combined: CombinedEvent[] = [
+    ...macroEvents
+      .filter((e) => new Date(e.date).getTime() >= cutoff)
+      .map(macroToCombined),
+    ...tickerEvents
+      .filter((e) => new Date(e.date).getTime() >= cutoff)
+      .map(tickerToCombined),
+  ].sort((a, b) => a.date.localeCompare(b.date));
+
+  // Cap to 8 rows so the section doesn't dominate the screen
+  const upcoming = combined.slice(0, 8);
   if (upcoming.length === 0) return null;
 
   return (
     <div style={{ padding: '8px 16px' }}>
       {upcoming.map((e, i) => {
+        const mm = e.dateKey.slice(5, 7);
+        const dd = e.dateKey.slice(8, 10);
         const d = new Date(e.date);
-        const dd = String(d.getDate()).padStart(2, '0');
-        const hh = String(d.getHours()).padStart(2, '0');
-        const mm = String(d.getMinutes()).padStart(2, '0');
-        const isHigh = e.impact === 'High';
+        const timeStr = e.showTime
+          ? `${mm}/${dd} · ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+          : `${mm}/${dd}`;
         return (
           <div
-            key={`${e.date}-${e.title}-${i}`}
+            key={e.key}
             style={{
               display: 'grid',
               gridTemplateColumns: 'auto 1fr auto',
@@ -557,14 +646,15 @@ function EventsList({ events }: { events: CalendarEvent[] }) {
               alignItems: 'baseline',
             }}
           >
-            <span style={{ color: 'var(--text-secondary)', letterSpacing: '0.08em' }}>
-              {dd} · {hh}:{mm}
+            <span style={{ color: 'var(--text-secondary)', letterSpacing: '0.08em', minWidth: '54px' }}>
+              {timeStr}
             </span>
             <span style={{
               fontFamily: "'Inter Tight', sans-serif",
               fontSize: '11px',
               fontWeight: 500,
               color: 'var(--text-primary)',
+              whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
             }}>
               {e.title}
             </span>
@@ -572,9 +662,9 @@ function EventsList({ events }: { events: CalendarEvent[] }) {
               fontFamily: 'JetBrains Mono, monospace',
               fontSize: '9px',
               letterSpacing: '0.1em',
-              color: isHigh ? 'var(--accent-red)' : 'var(--accent-amber)',
+              color: e.badgeColor,
             }}>
-              {isHigh ? 'HIGH' : 'MED'}
+              {e.badge}
             </span>
           </div>
         );
@@ -587,6 +677,7 @@ function HeatmapCalendar() {
   const theme = useTheme();
   const [data, setData] = useState<DayScore[] | null>(null);
   const [events, setEvents] = useState<CalendarEvent[]>([]);
+  const [tickerEvents, setTickerEvents] = useState<TickerEvent[]>([]);
   const [portfolioPoints, setPortfolioPoints] = useState<PortfolioPoint[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -597,9 +688,13 @@ function HeatmapCalendar() {
     let cancelled = false;
     async function load() {
       try {
-        const [hRes, eRes] = await Promise.all([
+        const tickers = loadTickers();
+        const [hRes, eRes, tRes] = await Promise.all([
           fetch('/api/history', { cache: 'no-store' }),
           fetch('/api/events').catch(() => null),
+          tickers.length > 0
+            ? fetch(`/api/ticker-events?symbols=${encodeURIComponent(tickers.join(','))}`).catch(() => null)
+            : Promise.resolve(null),
         ]);
         if (!hRes.ok) throw new Error(`HTTP ${hRes.status}`);
         const hJson: HistoryResponse = await hRes.json();
@@ -610,6 +705,10 @@ function HeatmapCalendar() {
         if (eRes && eRes.ok) {
           const eJson: { events: CalendarEvent[] } = await eRes.json();
           if (!cancelled) setEvents(eJson.events ?? []);
+        }
+        if (tRes && tRes.ok) {
+          const tJson: { events: TickerEvent[] } = await tRes.json();
+          if (!cancelled) setTickerEvents(tJson.events ?? []);
         }
       } catch (e: any) {
         if (!cancelled) {
@@ -640,7 +739,12 @@ function HeatmapCalendar() {
   }, []);
 
   const months = useMemo(() => (data ? groupByMonth(data) : []), [data]);
-  const eventKeys = useMemo(() => new Set(events.map((e) => e.dateKey)), [events]);
+  const eventKeys = useMemo(() => {
+    const set = new Set<string>();
+    for (const e of events) set.add(e.dateKey);
+    for (const t of tickerEvents) set.add(t.dateKey);
+    return set;
+  }, [events, tickerEvents]);
   const todayKey = useMemo(() => todayKeyET(), []);
 
   const currentMonthIdx = monthIndex < 0 ? months.length - 1 : monthIndex;
@@ -687,7 +791,7 @@ function HeatmapCalendar() {
         onNext={goNext}
         onDayClick={handleDayClick}
       />
-      <EventsList events={events} />
+      <EventsList macroEvents={events} tickerEvents={tickerEvents} />
 
       {selectedDay && createPortal(
         <DayDetail day={selectedDay} onClose={() => setSelectedDay(null)} />,
