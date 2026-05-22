@@ -135,7 +135,7 @@ function RedditDailyChart({ data }: { data: RedditDaily[] }) {
           color: 'var(--text-secondary)', opacity: 0.6, marginTop: '4px',
           letterSpacing: '0.08em',
         }}>
-          매일 watchlist 조회 시 자동으로 누적됩니다
+          서버에서 매일 자동으로 누적합니다
         </p>
       </div>
     );

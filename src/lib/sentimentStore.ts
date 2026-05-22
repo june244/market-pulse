@@ -47,3 +47,22 @@ export function getSnapshotsFor(symbol: string, days = 30): DailySentimentSnapsh
   });
   return result.sort((a, b) => a.date.localeCompare(b.date));
 }
+
+// ── Seen-tickers registry (for nightly cron snapshot) ──
+// Seeded with popular US stocks so the cron has something to snapshot on a fresh
+// deploy. Custom user tickers get added the first time /api/sentiment is hit.
+const POPULAR_DEFAULTS = [
+  'AAPL', 'MSFT', 'GOOGL', 'AMZN', 'NVDA', 'META', 'TSLA',
+  'AMD', 'NFLX', 'AVGO', 'ORCL', 'CRM', 'COST', 'WMT',
+  'JPM', 'V', 'MA', 'BAC', 'XOM', 'JNJ',
+];
+
+const seenTickers = new Set<string>(POPULAR_DEFAULTS);
+
+export function recordSeenTicker(symbol: string): void {
+  seenTickers.add(symbol.toUpperCase());
+}
+
+export function getSeenTickers(): string[] {
+  return Array.from(seenTickers);
+}

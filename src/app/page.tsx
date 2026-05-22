@@ -13,6 +13,7 @@ import BottomNav from '@/components/BottomNav';
 import ThemePicker from '@/components/ThemePicker';
 import PortfolioRoast from '@/components/PortfolioRoast';
 import MarketThermometer from '@/components/MarketThermometer';
+import DailyBrief from '@/components/DailyBrief';
 
 const CoinTab = dynamic(() => import('@/components/CoinTab'), {
   ssr: false,
@@ -449,6 +450,7 @@ export default function Home() {
         >
           {/* Tab 0: Dashboard */}
           <div className="w-full flex-shrink-0 px-4">
+            <DailyBrief symbols={tickers} />
             <FearGreedGauge data={fearGreedData} loading={loading} />
             <VIXCard data={vixData} loading={loading} />
             <MarketThermometer fearGreed={fearGreedData} vix={vixData} macro={macroData} loading={loading} />
@@ -471,6 +473,7 @@ export default function Home() {
 
       {/* ── Desktop: all content visible (no tabs) ── */}
       <div className="hidden md:block">
+        <DailyBrief symbols={tickers} />
         <FearGreedGauge data={fearGreedData} loading={loading} />
         <VIXCard data={vixData} loading={loading} />
         <MarketThermometer fearGreed={fearGreedData} vix={vixData} macro={macroData} loading={loading} />
