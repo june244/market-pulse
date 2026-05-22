@@ -14,6 +14,9 @@ export default auth((req) => {
   if (pathname.startsWith('/api/cron/')) return NextResponse.next();
 
   if (!req.auth) {
+    if (pathname.startsWith('/api/')) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
     const url = new URL('/login', req.url);
     if (pathname !== '/') url.searchParams.set('from', pathname);
     return NextResponse.redirect(url);

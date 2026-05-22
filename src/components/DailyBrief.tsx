@@ -43,12 +43,19 @@ export default function DailyBrief({ symbols }: Props) {
         ? `/api/daily-brief?symbols=${encodeURIComponent(sym)}${force ? '&force=1' : ''}`
         : `/api/daily-brief${force ? '?force=1' : ''}`;
       const res = await fetch(url, { cache: 'no-store' });
-      if (!res.ok) {
-        const body = await res.json().catch(() => null);
-        throw new Error(body?.error || `HTTP ${res.status}`);
+      const contentType = res.headers.get('content-type') || '';
+      if (!contentType.includes('application/json')) {
+        if (res.status === 401 || res.redirected) {
+          window.location.href = '/login';
+          return;
+        }
+        throw new Error(`HTTP ${res.status}`);
       }
-      const json: BriefResponse = await res.json();
-      setBrief(json);
+      const json = await res.json();
+      if (!res.ok) {
+        throw new Error(json?.error || `HTTP ${res.status}`);
+      }
+      setBrief(json as BriefResponse);
     } catch (e: any) {
       setError(e?.message || 'failed');
     } finally {

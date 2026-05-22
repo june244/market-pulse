@@ -1,4 +1,4 @@
-const CACHE_NAME = 'market-pulse-v3';
+const CACHE_NAME = 'market-pulse-v4';
 const STATIC_ASSETS = ['/'];
 
 // Install — cache shell
@@ -27,13 +27,20 @@ self.addEventListener('fetch', (event) => {
   // Skip non-GET
   if (request.method !== 'GET') return;
 
-  // API calls: network-first, fall back to cached data
+  // API calls: network-first, fall back to cached data.
+  // Skip caching for auth-related routes and non-OK responses.
   if (url.pathname.startsWith('/api/')) {
+    if (url.pathname.startsWith('/api/auth/')) {
+      event.respondWith(fetch(request));
+      return;
+    }
     event.respondWith(
       fetch(request)
         .then((res) => {
-          const clone = res.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
+          if (res.ok && res.status >= 200 && res.status < 300) {
+            const clone = res.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
+          }
           return res;
         })
         .catch(() => caches.match(request))
