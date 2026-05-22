@@ -13,6 +13,13 @@ export default auth((req) => {
   // Allow Vercel cron — authenticated via Bearer token in route handler itself
   if (pathname.startsWith('/api/cron/')) return NextResponse.next();
 
+  // Allow server-to-server internal calls (forwarded by daily-brief / cron)
+  // when they carry the AUTH_SECRET via the x-internal-key header.
+  const internalKey = req.headers.get('x-internal-key');
+  if (internalKey && process.env.AUTH_SECRET && internalKey === process.env.AUTH_SECRET) {
+    return NextResponse.next();
+  }
+
   if (!req.auth) {
     if (pathname.startsWith('/api/')) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });

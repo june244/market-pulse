@@ -17,9 +17,11 @@ function startOfDayUTC(d: Date): number {
 
 async function gatherInput(origin: string, symbols: string[]): Promise<BriefInput> {
   const symParam = symbols.join(',');
+  const headers: Record<string, string> = {};
+  if (process.env.AUTH_SECRET) headers['x-internal-key'] = process.env.AUTH_SECRET;
   const [marketRes, eventsRes] = await Promise.all([
-    fetch(`${origin}/api/market?tickers=${encodeURIComponent(symParam)}`, { cache: 'no-store' }),
-    fetch(`${origin}/api/ticker-events?symbols=${encodeURIComponent(symParam)}`, { cache: 'no-store' }),
+    fetch(`${origin}/api/market?tickers=${encodeURIComponent(symParam)}`, { cache: 'no-store', headers }),
+    fetch(`${origin}/api/ticker-events?symbols=${encodeURIComponent(symParam)}`, { cache: 'no-store', headers }),
   ]);
 
   const market = marketRes.ok ? await marketRes.json() : {};

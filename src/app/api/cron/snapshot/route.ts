@@ -64,9 +64,11 @@ async function handle(req: NextRequest) {
   const origin = new URL(req.url).origin;
   const briefSymbols = symbols.slice(0, 12);
   const symParam = briefSymbols.join(',');
+  const internalHeaders: Record<string, string> = {};
+  if (process.env.AUTH_SECRET) internalHeaders['x-internal-key'] = process.env.AUTH_SECRET;
   const [marketRes, eventsRes] = await Promise.all([
-    fetch(`${origin}/api/market?tickers=${encodeURIComponent(symParam)}`, { cache: 'no-store' }),
-    fetch(`${origin}/api/ticker-events?symbols=${encodeURIComponent(symParam)}`, { cache: 'no-store' }),
+    fetch(`${origin}/api/market?tickers=${encodeURIComponent(symParam)}`, { cache: 'no-store', headers: internalHeaders }),
+    fetch(`${origin}/api/ticker-events?symbols=${encodeURIComponent(symParam)}`, { cache: 'no-store', headers: internalHeaders }),
   ]);
   const market = marketRes.ok ? await marketRes.json() : {};
   const events = eventsRes.ok ? await eventsRes.json() : { events: [] };
