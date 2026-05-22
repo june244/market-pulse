@@ -239,10 +239,11 @@ export default function TickerEditor({ tickers, onUpdate }: Props) {
       <button
         onClick={() => setIsOpen(!isOpen)}
         style={{
-          display: 'flex',
+          display: 'inline-flex',
           alignItems: 'center',
           gap: '6px',
-          padding: '5px 10px',
+          height: '24px',
+          padding: '0 10px',
           border: isOpen ? '1px solid var(--text-primary)' : '1px solid var(--text-secondary)',
           background: isOpen ? 'var(--text-primary)' : 'transparent',
           color: isOpen ? 'var(--bg-primary)' : 'var(--text-secondary)',
@@ -252,6 +253,8 @@ export default function TickerEditor({ tickers, onUpdate }: Props) {
           textTransform: 'uppercase',
           cursor: 'pointer',
           transition: 'all 0.15s',
+          whiteSpace: 'nowrap',
+          lineHeight: 1,
         }}
       >
         <svg

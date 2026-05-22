@@ -19,12 +19,17 @@ export default function ThemePicker({ current, onChange }: Props) {
         fontSize: '9px',
         letterSpacing: '0.18em',
         textTransform: 'uppercase',
-        padding: '5px 10px',
+        height: '24px',
+        padding: '0 10px',
         border: '1px solid var(--text-secondary)',
         background: 'transparent',
         color: 'var(--text-secondary)',
         cursor: 'pointer',
         transition: 'border-color 0.15s, color 0.15s',
+        whiteSpace: 'nowrap',
+        display: 'inline-flex',
+        alignItems: 'center',
+        lineHeight: 1,
       }}
       onMouseEnter={(e) => {
         (e.currentTarget as HTMLButtonElement).style.borderColor = 'var(--text-primary)';

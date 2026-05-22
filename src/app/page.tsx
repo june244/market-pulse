@@ -381,18 +381,20 @@ export default function Home() {
                 letterSpacing: '0.22em',
                 textTransform: 'uppercase',
                 color: 'var(--text-secondary)',
+                whiteSpace: 'nowrap',
               }}
             >
               Market Pulse
             </span>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5" style={{ flexShrink: 0 }}>
             {lastRefresh && (
               <span style={{
                 fontFamily: 'JetBrains Mono, monospace',
                 fontSize: '8px',
                 letterSpacing: '0.12em',
                 color: 'var(--text-secondary)',
+                whiteSpace: 'nowrap',
               }}>
                 {lastRefresh}
               </span>
@@ -402,13 +404,20 @@ export default function Home() {
               style={{
                 background: 'transparent',
                 border: '1px solid var(--text-secondary)',
-                padding: '4px 8px',
+                height: '24px',
+                width: '28px',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
                 color: 'var(--text-secondary)',
                 cursor: 'pointer',
                 fontFamily: 'JetBrains Mono, monospace',
-                fontSize: '8px',
+                fontSize: '10px',
                 letterSpacing: '0.12em',
                 textTransform: 'uppercase',
+                whiteSpace: 'nowrap',
+                lineHeight: 1,
+                padding: 0,
               }}
               title="새로고침"
             >
@@ -423,13 +432,20 @@ export default function Home() {
                 style={{
                   background: 'transparent',
                   border: '1px solid var(--text-secondary)',
-                  padding: '4px 8px',
+                  height: '24px',
+                  width: '28px',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
                   color: 'var(--text-secondary)',
                   cursor: 'pointer',
                   fontFamily: 'JetBrains Mono, monospace',
-                  fontSize: '8px',
+                  fontSize: '10px',
                   letterSpacing: '0.12em',
                   textTransform: 'uppercase',
+                  whiteSpace: 'nowrap',
+                  lineHeight: 1,
+                  padding: 0,
                 }}
               >
                 ⏏
