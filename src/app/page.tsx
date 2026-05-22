@@ -14,6 +14,7 @@ import ThemePicker from '@/components/ThemePicker';
 import PortfolioRoast from '@/components/PortfolioRoast';
 import MarketThermometer from '@/components/MarketThermometer';
 import DailyBrief from '@/components/DailyBrief';
+import { signOutAction } from '@/lib/authActions';
 
 const CoinTab = dynamic(() => import('@/components/CoinTab'), {
   ssr: false,
@@ -415,6 +416,25 @@ export default function Home() {
             </button>
             <ThemePicker current={theme} onChange={handleThemeChange} />
             <TickerEditor tickers={tickers} onUpdate={handleTickerUpdate} />
+            <form action={signOutAction}>
+              <button
+                type="submit"
+                title="로그아웃"
+                style={{
+                  background: 'transparent',
+                  border: '1px solid var(--text-secondary)',
+                  padding: '4px 8px',
+                  color: 'var(--text-secondary)',
+                  cursor: 'pointer',
+                  fontFamily: 'JetBrains Mono, monospace',
+                  fontSize: '8px',
+                  letterSpacing: '0.12em',
+                  textTransform: 'uppercase',
+                }}
+              >
+                ⏏
+              </button>
+            </form>
           </div>
         </div>
       </header>
