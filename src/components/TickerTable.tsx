@@ -347,6 +347,137 @@ function StatCell({
   );
 }
 
+function computeAnnualizedVol(sparkline?: number[]): number | null {
+  if (!sparkline || sparkline.length < 6) return null;
+  const returns: number[] = [];
+  for (let i = 1; i < sparkline.length; i++) {
+    const prev = sparkline[i - 1];
+    const cur = sparkline[i];
+    if (prev > 0 && cur > 0) returns.push((cur - prev) / prev);
+  }
+  if (returns.length < 5) return null;
+  const avg = returns.reduce((sum, r) => sum + r, 0) / returns.length;
+  const variance = returns.reduce((sum, r) => sum + Math.pow(r - avg, 2), 0) / returns.length;
+  return Math.sqrt(variance) * Math.sqrt(52) * 100;
+}
+
+function RiskSummaryPanel({
+  risk,
+}: {
+  risk: {
+    score: number;
+    label: string;
+    color: string;
+    topHolding: { symbol: string; weight: number } | null;
+    topThreeWeight: number;
+    effectivePositions: number;
+    highVolWeight: number;
+    highVolSymbols: string[];
+  };
+}) {
+  const bars = [
+    { label: 'TOP 1', value: risk.topHolding?.weight ?? 0 },
+    { label: 'TOP 3', value: risk.topThreeWeight },
+    { label: 'HIGH VOL', value: risk.highVolWeight },
+  ];
+
+  return (
+    <div style={{ padding: '10px 16px', borderBottom: '1px solid var(--text-primary)' }}>
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'baseline',
+          justifyContent: 'space-between',
+          gap: '12px',
+          marginBottom: '8px',
+        }}
+      >
+        <div
+          style={{
+            fontFamily: 'JetBrains Mono, monospace',
+            fontSize: '9px',
+            letterSpacing: '0.22em',
+            textTransform: 'uppercase',
+            color: 'var(--text-secondary)',
+          }}
+        >
+          Risk Exposure
+        </div>
+        <div
+          style={{
+            fontFamily: 'JetBrains Mono, monospace',
+            fontSize: '9px',
+            letterSpacing: '0.18em',
+            textTransform: 'uppercase',
+            color: risk.color,
+          }}
+        >
+          {risk.label} · {risk.score}
+        </div>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '56px 1fr 40px', gap: '8px', alignItems: 'center' }}>
+        {bars.map((bar) => (
+          <React.Fragment key={bar.label}>
+            <span
+              style={{
+                fontFamily: 'JetBrains Mono, monospace',
+                fontSize: '8px',
+                letterSpacing: '0.14em',
+                color: 'var(--text-secondary)',
+              }}
+            >
+              {bar.label}
+            </span>
+            <div style={{ height: '6px', border: '1px solid var(--bg-tertiary)', overflow: 'hidden' }}>
+              <div
+                style={{
+                  width: `${Math.min(100, Math.max(0, bar.value))}%`,
+                  height: '100%',
+                  background: bar.value >= 60 ? 'var(--accent-red)' : bar.value >= 40 ? 'var(--accent-amber)' : 'var(--text-primary)',
+                }}
+              />
+            </div>
+            <span
+              style={{
+                fontFamily: 'JetBrains Mono, monospace',
+                fontSize: '9px',
+                textAlign: 'right',
+                color: 'var(--text-primary)',
+              }}
+            >
+              {formatNumber(bar.value, 0)}%
+            </span>
+          </React.Fragment>
+        ))}
+      </div>
+
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          gap: '12px',
+          marginTop: '8px',
+          fontFamily: 'JetBrains Mono, monospace',
+          fontSize: '9px',
+          color: 'var(--text-secondary)',
+        }}
+      >
+        <span>
+          유효 종목수{' '}
+          <b style={{ color: 'var(--text-primary)', fontWeight: 500 }}>{formatNumber(risk.effectivePositions, 1)}</b>
+        </span>
+        <span style={{ textAlign: 'right' }}>
+          {risk.topHolding ? `${risk.topHolding.symbol} ${formatNumber(risk.topHolding.weight, 0)}%` : '보유 없음'}
+          {risk.highVolSymbols.length > 0 && (
+            <span style={{ color: 'var(--accent-amber)' }}> · 변동 {risk.highVolSymbols.slice(0, 2).join('/')}</span>
+          )}
+        </span>
+      </div>
+    </div>
+  );
+}
+
 // --- Day Range Bar ---
 function DayRangeBar({ low, high, current }: { low: number; high: number; current: number }) {
   const range = high - low || 1;
@@ -487,7 +618,7 @@ function TickerTable({ tickers, loading, tickerOrder, onReorder, onDelete }: Pro
     let totalDailyChange = 0;
     let hasAny = false;
 
-    type SymbolStat = { symbol: string; invested: number; currentValue: number; returnPct: number };
+    type SymbolStat = { symbol: string; invested: number; currentValue: number; returnPct: number; vol: number | null };
     const symbolStats: SymbolStat[] = [];
 
     for (const t of sortedTickers) {
@@ -502,7 +633,13 @@ function TickerTable({ tickers, loading, tickerOrder, onReorder, onDelete }: Pro
         totalUnrealized += (t.price - avgCost) * totalQty;
         totalDailyChange += t.change * totalQty;
         const returnPct = avgCost > 0 ? ((t.price - avgCost) / avgCost) * 100 : 0;
-        symbolStats.push({ symbol: t.symbol, invested: investedAmount, currentValue, returnPct });
+        symbolStats.push({
+          symbol: t.symbol,
+          invested: investedAmount,
+          currentValue,
+          returnPct,
+          vol: computeAnnualizedVol(t.sparkline),
+        });
       }
       if (realizedPL !== 0) {
         hasAny = true;
@@ -554,10 +691,45 @@ function TickerTable({ tickers, loading, tickerOrder, onReorder, onDelete }: Pro
       ? symbolStats.reduce((w, s) => s.returnPct < w.returnPct ? s : w)
       : null;
 
+    const weights = symbolStats
+      .map((s) => ({
+        symbol: s.symbol,
+        weight: totalValue > 0 ? (s.currentValue / totalValue) * 100 : 0,
+        vol: s.vol,
+      }))
+      .sort((a, b) => b.weight - a.weight);
+    const topHolding = weights[0] ? { symbol: weights[0].symbol, weight: weights[0].weight } : null;
+    const topThreeWeight = weights.slice(0, 3).reduce((sum, w) => sum + w.weight, 0);
+    const hhi = weights.reduce((sum, w) => sum + Math.pow(w.weight / 100, 2), 0);
+    const effectivePositions = hhi > 0 ? 1 / hhi : 0;
+    const highVol = weights.filter((w) => (w.vol ?? 0) >= 45);
+    const highVolWeight = highVol.reduce((sum, w) => sum + w.weight, 0);
+
+    const concentrationRisk = topHolding ? Math.max(0, (topHolding.weight - 25) * 1.2) : 0;
+    const topThreeRisk = Math.max(0, (topThreeWeight - 60) * 0.7);
+    const breadthRisk = Math.max(0, (4 - effectivePositions) * 8);
+    const volatilityRisk = highVolWeight * 0.35;
+    const riskScore = Math.round(Math.min(100, concentrationRisk + topThreeRisk + breadthRisk + volatilityRisk));
+    const riskLevel = riskScore >= 70
+      ? { label: 'High', color: 'var(--accent-red)' }
+      : riskScore >= 40
+        ? { label: 'Medium', color: 'var(--accent-amber)' }
+        : { label: 'Balanced', color: 'var(--accent-green)' };
+
     return {
       totalValue, totalInvested, totalUnrealized, totalRealized, totalPL, returnPct,
       totalDailyChange, dailyChangePct,
       segments, wins, total: symbolStats.length, winRate, best, worst,
+      risk: {
+        score: riskScore,
+        label: riskLevel.label,
+        color: riskLevel.color,
+        topHolding,
+        topThreeWeight,
+        effectivePositions,
+        highVolWeight,
+        highVolSymbols: highVol.map((w) => w.symbol),
+      },
     };
   }, [allTrades, sortedTickers]);
 
@@ -892,6 +1064,10 @@ function TickerTable({ tickers, loading, tickerOrder, onReorder, onDelete }: Pro
             </span>
           )}
         </div>
+      )}
+
+      {portfolioSummary && (
+        <RiskSummaryPanel risk={portfolioSummary.risk} />
       )}
 
       {/* ── Holdings table header (n-tbl hdr) ── */}
