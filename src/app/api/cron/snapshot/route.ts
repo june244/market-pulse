@@ -97,6 +97,7 @@ async function handle(req: NextRequest) {
 
     const input: BriefInput = {
       date: todayET(),
+      cacheKey: `${todayET()}:cron`,
       fearGreed: market.fearGreed
         ? { score: market.fearGreed.score, rating: market.fearGreed.rating }
         : null,
@@ -106,9 +107,10 @@ async function handle(req: NextRequest) {
       macro: (market.macro ?? []).map((m: any) => ({ label: m.label, changePercent: m.changePercent })),
       tickers,
       upcomingEvents,
+      portfolio: null,
     };
     const brief = await generateBrief(input);
-    await setBriefCached(input.date, brief);
+    await setBriefCached(input.cacheKey ?? input.date, brief);
     briefOk = true;
   } catch (e: any) {
     briefError = e?.message || 'brief generation failed';

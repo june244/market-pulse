@@ -22,13 +22,23 @@ export interface BriefEvent {
   daysUntil: number;
 }
 
+export interface BriefPortfolioSnapshot {
+  totalValue: number;
+  dailyChange: number;
+  dailyChangePercent: number;
+  leaders: { symbol: string; amount: number; changePercent: number }[];
+  laggards: { symbol: string; amount: number; changePercent: number }[];
+}
+
 export interface BriefInput {
   date: string;
+  cacheKey?: string;
   fearGreed: { score: number; rating: string } | null;
   vix: { value: number; changePercent: number } | null;
   macro: { label: string; changePercent: number }[];
   tickers: BriefTickerSnapshot[];
   upcomingEvents: BriefEvent[];
+  portfolio: BriefPortfolioSnapshot | null;
 }
 
 export interface BriefOutput {
@@ -60,7 +70,8 @@ const SYSTEM_PROMPT = `당신은 한국어로 작성하는 시장 브리핑 작�
 규칙:
 - 반드시 한국어, 2~3문장, 총 200자 이내.
 - 톤은 시니어 트레이더가 친구에게 짧게 정리해주는 느낌. 정보 밀도 높고 군더더기 없음.
-- 핵심만: Fear&Greed/VIX 분위기 + 매크로 흐름 한 줄, 그리고 등록 종목 중 가장 주목할 만한 1~2개 코멘트.
+- 핵심만: Fear&Greed/VIX 분위기 + 매크로 흐름 한 줄, 그리고 포트폴리오 일일 손익을 움직인 종목 1~2개.
+- 포트폴리오 데이터가 있으면 총 일일 P/L(%와 금액), 가장 크게 기여한 종목/발목 잡은 종목을 우선 언급.
 - 다가오는 earnings/dividend가 있으면 D-N 형태로 짚을 것 (예: NVDA 어닝 D-3).
 - 분석가 mean이 매우 강한 매수(1.0~1.5) 또는 매도(4.0+) 신호이거나 Reddit 멘션이 큰 종목은 언급.
 - 숫자는 반올림. 불필요한 인사말("안녕하세요" 등), 면책 문구, 마크다운, 이모지, 따옴표 사용 금지.
@@ -92,6 +103,18 @@ function summarizeInput(input: BriefInput): string {
       if (t.analystMean != null) parts.push(`mean ${t.analystMean.toFixed(2)}`);
       if (t.redditMentions != null && t.redditMentions > 0) parts.push(`reddit ${t.redditMentions}`);
       lines.push(`  ${t.symbol}: ${parts.join(', ')}`);
+    }
+  }
+
+  if (input.portfolio) {
+    const p = input.portfolio;
+    const dir = p.dailyChange >= 0 ? '+' : '';
+    lines.push(`포트폴리오: 총액 $${Math.round(p.totalValue).toLocaleString('en-US')}, 오늘 ${dir}$${Math.abs(p.dailyChange).toFixed(0)} (${dir}${p.dailyChangePercent.toFixed(2)}%)`);
+    if (p.leaders.length > 0) {
+      lines.push(`기여: ${p.leaders.map((x) => `${x.symbol} ${x.amount >= 0 ? '+' : ''}$${x.amount.toFixed(0)} (${x.changePercent >= 0 ? '+' : ''}${x.changePercent.toFixed(1)}%)`).join(', ')}`);
+    }
+    if (p.laggards.length > 0) {
+      lines.push(`차감: ${p.laggards.map((x) => `${x.symbol} ${x.amount >= 0 ? '+' : ''}$${x.amount.toFixed(0)} (${x.changePercent >= 0 ? '+' : ''}${x.changePercent.toFixed(1)}%)`).join(', ')}`);
     }
   }
 
@@ -140,6 +163,6 @@ export async function generateBrief(input: BriefInput): Promise<BriefOutput> {
     date: input.date,
     cached: false,
   };
-  await setBriefCached(input.date, brief);
+  await setBriefCached(input.cacheKey ?? input.date, brief);
   return brief;
 }

@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { generateBrief, getBriefCached, BriefInput, BriefEvent } from '@/lib/dailyBrief';
+import { generateBrief, getBriefCached, BriefInput, BriefEvent, BriefPortfolioSnapshot } from '@/lib/dailyBrief';
 import { getCached } from '@/lib/sentimentCache';
 import { getSeenTickers } from '@/lib/sentimentStore';
+import { auth } from '@/auth';
+import { getUserData, UserData } from '@/lib/userDataStore';
+import { calcPosition } from '@/lib/utils';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -15,7 +18,50 @@ function startOfDayUTC(d: Date): number {
   return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
 }
 
-async function gatherInput(origin: string, symbols: string[]): Promise<BriefInput> {
+function buildPortfolioSnapshot(marketTickers: any[], userData: UserData | null): BriefPortfolioSnapshot | null {
+  if (!userData) return null;
+
+  let totalValue = 0;
+  let dailyChange = 0;
+  const contributors: { symbol: string; amount: number; changePercent: number }[] = [];
+
+  for (const ticker of marketTickers) {
+    const trades = userData.trades[ticker.symbol] ?? [];
+    if (trades.length === 0) continue;
+    const position = calcPosition(trades);
+    if (position.totalQty <= 0) continue;
+
+    const value = ticker.price * position.totalQty;
+    const amount = ticker.change * position.totalQty;
+    totalValue += value;
+    dailyChange += amount;
+    contributors.push({
+      symbol: ticker.symbol,
+      amount,
+      changePercent: ticker.changePercent,
+    });
+  }
+
+  if (totalValue <= 0 || contributors.length === 0) return null;
+
+  const prevValue = totalValue - dailyChange;
+  const dailyChangePercent = prevValue > 0 ? (dailyChange / prevValue) * 100 : 0;
+
+  return {
+    totalValue,
+    dailyChange,
+    dailyChangePercent,
+    leaders: contributors.filter((c) => c.amount > 0).sort((a, b) => b.amount - a.amount).slice(0, 2),
+    laggards: contributors.filter((c) => c.amount < 0).sort((a, b) => a.amount - b.amount).slice(0, 2),
+  };
+}
+
+function briefCacheKey(dateKey: string, email: string | null, symbols: string[]): string {
+  const scope = email ? `user:${email}` : `symbols:${symbols.join(',')}`;
+  return `${dateKey}:${scope}`;
+}
+
+async function gatherInput(origin: string, symbols: string[], userData: UserData | null, cacheKey: string): Promise<BriefInput> {
   const symParam = symbols.join(',');
   const headers: Record<string, string> = {};
   if (process.env.AUTH_SECRET) headers['x-internal-key'] = process.env.AUTH_SECRET;
@@ -36,7 +82,8 @@ async function gatherInput(origin: string, symbols: string[]): Promise<BriefInpu
     })
     .filter((e: BriefEvent) => e.daysUntil >= 0 && e.daysUntil <= 3);
 
-  const tickerSnapshots = await Promise.all((market.tickers ?? []).map(async (t: any) => {
+  const marketTickers = market.tickers ?? [];
+  const tickerSnapshots = await Promise.all(marketTickers.map(async (t: any) => {
     const sentiment = await getCached(t.symbol);
     return {
       symbol: t.symbol,
@@ -48,6 +95,7 @@ async function gatherInput(origin: string, symbols: string[]): Promise<BriefInpu
 
   return {
     date: todayET(),
+    cacheKey,
     fearGreed: market.fearGreed
       ? { score: market.fearGreed.score, rating: market.fearGreed.rating }
       : null,
@@ -60,10 +108,11 @@ async function gatherInput(origin: string, symbols: string[]): Promise<BriefInpu
     })),
     tickers: tickerSnapshots,
     upcomingEvents,
+    portfolio: buildPortfolioSnapshot(marketTickers, userData),
   };
 }
 
-async function parseSymbols(req: NextRequest): Promise<string[]> {
+async function parseSymbols(req: NextRequest, userData: UserData | null): Promise<string[]> {
   const param = req.nextUrl.searchParams.get('symbols') ?? '';
   if (param) {
     return param
@@ -71,28 +120,33 @@ async function parseSymbols(req: NextRequest): Promise<string[]> {
       .map((s) => s.trim().toUpperCase())
       .filter((s) => s && /^[A-Z][A-Z0-9.\-^]{0,9}$/.test(s));
   }
+  if (userData?.tickers.length) return userData.tickers.slice(0, 12);
   return (await getSeenTickers()).slice(0, 12);
 }
 
 export async function GET(req: NextRequest) {
   const force = req.nextUrl.searchParams.get('force') === '1';
   const dateKey = todayET();
+  const session = await auth();
+  const email = session?.user?.email?.toLowerCase() ?? null;
+  const userData = email ? await getUserData(email) : null;
+  const symbols = await parseSymbols(req, userData);
+  const cacheKey = briefCacheKey(dateKey, email, symbols);
 
   if (!force) {
-    const cached = await getBriefCached(dateKey);
+    const cached = await getBriefCached(cacheKey);
     if (cached) {
       return NextResponse.json({ ...cached, cached: true });
     }
   }
 
-  const symbols = await parseSymbols(req);
   if (symbols.length === 0) {
     return NextResponse.json({ error: 'no symbols' }, { status: 400 });
   }
 
   try {
     const origin = new URL(req.url).origin;
-    const input = await gatherInput(origin, symbols);
+    const input = await gatherInput(origin, symbols, userData, cacheKey);
     const brief = await generateBrief(input);
     return NextResponse.json(brief);
   } catch (e: any) {
