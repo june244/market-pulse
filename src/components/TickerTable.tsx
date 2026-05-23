@@ -386,6 +386,18 @@ interface Props {
 
 const CONFETTI_COLORS = ['#00ff87', '#ffd700', '#00aaff', '#ff3366', '#ffaa00'];
 
+async function saveUserDataPatch(patch: Record<string, unknown>) {
+  try {
+    await fetch('/api/user-data', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(patch),
+    });
+  } catch {
+    // Local storage remains the offline fallback.
+  }
+}
+
 function spawnConfetti(container: HTMLElement) {
   for (let i = 0; i < 20; i++) {
     const span = document.createElement('span');
@@ -421,7 +433,25 @@ function TickerTable({ tickers, loading, tickerOrder, onReorder, onDelete }: Pro
   const swipeDidAction = useRef<Set<string>>(new Set());
 
   useEffect(() => {
-    setAllTrades(loadTrades());
+    const localTrades = loadTrades();
+    setAllTrades(localTrades);
+
+    let cancelled = false;
+    fetch('/api/user-data', { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((remote) => {
+        if (cancelled || !remote) return;
+        const remoteTrades = remote.trades && typeof remote.trades === 'object' ? remote.trades : {};
+        if (Object.keys(remoteTrades).length > 0) {
+          setAllTrades(remoteTrades);
+          saveTrades(remoteTrades);
+        } else if (Object.keys(localTrades).length > 0) {
+          saveUserDataPatch({ trades: localTrades });
+        }
+      })
+      .catch(() => {});
+
+    return () => { cancelled = true; };
   }, []);
 
   // Fetch community sentiment for currently registered tickers (cached server-side 24h)
@@ -678,6 +708,7 @@ function TickerTable({ tickers, loading, tickerOrder, onReorder, onDelete }: Pro
     setAllTrades((prev) => {
       const next = { ...prev, [symbol]: [...(prev[symbol] || []), trade] };
       saveTrades(next);
+      saveUserDataPatch({ trades: next });
       return next;
     });
   }, []);
@@ -687,6 +718,7 @@ function TickerTable({ tickers, loading, tickerOrder, onReorder, onDelete }: Pro
       const next = { ...prev, [symbol]: (prev[symbol] || []).filter((t) => t.id !== tradeId) };
       if (next[symbol].length === 0) delete next[symbol];
       saveTrades(next);
+      saveUserDataPatch({ trades: next });
       return next;
     });
   }, []);

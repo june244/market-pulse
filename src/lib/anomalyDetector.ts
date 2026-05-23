@@ -42,11 +42,11 @@ function daysBetween(target: Date, ref: Date): number {
 // In-memory anti-duplication: track which D-3 anomalies we already pushed.
 const sentDMinus3 = new Map<string, string>(); // symbol → ISO date emitted
 
-export function detectAnomalies(input: {
+export async function detectAnomalies(input: {
   market: MarketSnapshot;
   events: TickerEvent[];
   yesterdayMarket?: { fearGreed?: { score: number; rating: string } | null; vix?: { value: number } | null } | null;
-}): Anomaly[] {
+}): Promise<Anomaly[]> {
   const out: Anomaly[] = [];
   const now = new Date();
 
@@ -80,9 +80,9 @@ export function detectAnomalies(input: {
 
   // 2) Analyst mean shift ±0.3 vs last week
   for (const t of input.market.tickers) {
-    const cur: SentimentEntry | null = getCached(t.symbol);
+    const cur: SentimentEntry | null = await getCached(t.symbol);
     if (!cur?.analyst?.mean) continue;
-    const hist = getSnapshotsFor(t.symbol, 14);
+    const hist = await getSnapshotsFor(t.symbol, 14);
     // pick snapshot ~7 days ago
     const cutoff = new Date(now);
     cutoff.setDate(cutoff.getDate() - 7);
@@ -104,10 +104,10 @@ export function detectAnomalies(input: {
 
   // 3) Reddit mention spike — today's mentions vs 7-day avg × 2.5
   for (const t of input.market.tickers) {
-    const cur = getCached(t.symbol);
+    const cur = await getCached(t.symbol);
     const today = cur?.reddit?.mentions ?? 0;
     if (today < 5) continue;
-    const hist = getSnapshotsFor(t.symbol, 7);
+    const hist = await getSnapshotsFor(t.symbol, 7);
     if (hist.length < 3) continue;
     const avg = hist.reduce((s, h) => s + h.redditMentions, 0) / hist.length;
     if (avg > 0 && today >= avg * 2.5) {

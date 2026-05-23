@@ -9,9 +9,13 @@
  */
 
 import { DayScore } from './types';
+import { storeGet, storeKeys, storeSet } from './persistentStore';
 
-// date "YYYY-MM-DD" → DayScore
-const store = new Map<string, DayScore>();
+const KEY_PREFIX = 'market:history';
+
+function keyFor(date: string): string {
+  return `${KEY_PREFIX}:${date}`;
+}
 
 function todayET(): string {
   return new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
@@ -57,10 +61,10 @@ function computeComposite(s: DailySnapshot): number {
 }
 
 /** Called by /api/market on every successful fetch */
-export function recordSnapshot(snapshot: DailySnapshot): void {
+export async function recordSnapshot(snapshot: DailySnapshot): Promise<void> {
   const date = todayET();
   const composite = computeComposite(snapshot);
-  store.set(date, {
+  await storeSet(keyFor(date), {
     date,
     composite,
     fg: snapshot.fg,
@@ -72,17 +76,25 @@ export function recordSnapshot(snapshot: DailySnapshot): void {
 }
 
 /** Called by /api/history — returns all stored snapshots */
-export function getSnapshots(): Map<string, DayScore> {
-  return store;
+export async function getSnapshots(): Promise<Map<string, DayScore>> {
+  const result = new Map<string, DayScore>();
+  const keys = await storeKeys(`${KEY_PREFIX}:*`);
+  await Promise.all(
+    keys.map(async (key) => {
+      const day = await storeGet<DayScore>(key);
+      if (day) result.set(day.date, day);
+    }),
+  );
+  return result;
 }
 
 /** Merge external API data into store (fills missing dates, updates non-live entries) */
-export function backfillIfMissing(date: string, day: DayScore): void {
-  const existing = store.get(date);
+export async function backfillIfMissing(date: string, day: DayScore): Promise<void> {
+  const existing = await storeGet<DayScore>(keyFor(date));
   if (!existing) {
-    store.set(date, day);
+    await storeSet(keyFor(date), day);
   } else if (!existing.marketOpen && day.marketOpen) {
     // Overwrite placeholder closed-day entry with real market data
-    store.set(date, day);
+    await storeSet(keyFor(date), day);
   }
 }

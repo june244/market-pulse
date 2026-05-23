@@ -10,7 +10,7 @@ export async function POST(req: NextRequest) {
     if (!sub?.endpoint) {
       return NextResponse.json({ error: 'invalid subscription' }, { status: 400 });
     }
-    addSubscription(sub);
+    await addSubscription(sub);
     return NextResponse.json({ ok: true });
   } catch (e: any) {
     return NextResponse.json({ error: e?.message || 'bad request' }, { status: 400 });
@@ -22,7 +22,7 @@ export async function DELETE(req: NextRequest) {
     const body = await req.json();
     const endpoint = body?.endpoint;
     if (!endpoint) return NextResponse.json({ error: 'endpoint required' }, { status: 400 });
-    removeSubscription(endpoint);
+    await removeSubscription(endpoint);
     return NextResponse.json({ ok: true });
   } catch (e: any) {
     return NextResponse.json({ error: e?.message || 'bad request' }, { status: 400 });

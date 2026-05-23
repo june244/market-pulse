@@ -65,6 +65,18 @@ const REFRESH_INTERVAL = 60_000; // 1 minute
 const EMPTY_TICKERS: TickerData[] = [];
 const EMPTY_MACRO: MacroItem[] = [];
 
+async function saveUserDataPatch(patch: Record<string, unknown>) {
+  try {
+    await fetch('/api/user-data', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(patch),
+    });
+  } catch {
+    // Local storage remains the offline fallback.
+  }
+}
+
 export default function Home() {
   const [data, setData] = useState<MarketData | null>(null);
   const [tickers, setTickers] = useState<string[]>(DEFAULT_TICKERS);
@@ -81,10 +93,37 @@ export default function Home() {
 
   // Load saved tickers + theme from localStorage on mount
   useEffect(() => {
-    setTickers(loadTickers());
-    const savedTheme = loadTheme();
-    setTheme(savedTheme);
-    document.documentElement.dataset.theme = savedTheme;
+    const localTickers = loadTickers();
+    const localTheme = loadTheme();
+    setTickers(localTickers);
+    setTheme(localTheme);
+    document.documentElement.dataset.theme = localTheme;
+
+    let cancelled = false;
+    fetch('/api/user-data', { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((remote) => {
+        if (cancelled || !remote) return;
+
+        const remoteTickers = Array.isArray(remote.tickers) ? remote.tickers : [];
+        if (remoteTickers.length > 0) {
+          setTickers(remoteTickers);
+          saveTickers(remoteTickers);
+        } else if (localTickers.length > 0) {
+          saveUserDataPatch({ tickers: localTickers });
+        }
+
+        if (remote.theme === 'nordic' || remote.theme === 'nordic-light') {
+          setTheme(remote.theme);
+          saveTheme(remote.theme);
+          document.documentElement.dataset.theme = remote.theme;
+        } else {
+          saveUserDataPatch({ theme: localTheme });
+        }
+      })
+      .catch(() => {});
+
+    return () => { cancelled = true; };
   }, []);
 
   const fetchData = useCallback(async () => {
@@ -140,12 +179,14 @@ export default function Home() {
   const handleThemeChange = useCallback((newTheme: Theme) => {
     setTheme(newTheme);
     saveTheme(newTheme);
+    saveUserDataPatch({ theme: newTheme });
     document.documentElement.dataset.theme = newTheme;
   }, []);
 
   const handleTickerUpdate = useCallback((newTickers: string[]) => {
     setTickers(newTickers);
     saveTickers(newTickers);
+    saveUserDataPatch({ tickers: newTickers });
   }, []);
 
   // Functional setState avoids depending on handleTickerUpdate reference
@@ -153,6 +194,7 @@ export default function Home() {
     setTickers((prev) => {
       const next = prev.filter((t) => t !== symbol);
       saveTickers(next);
+      saveUserDataPatch({ tickers: next });
       return next;
     });
   }, []);

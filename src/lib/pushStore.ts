@@ -4,6 +4,7 @@
  */
 
 import webpush, { PushSubscription, WebPushError } from 'web-push';
+import { storeDel, storeGet, storeKeys, storeSet } from './persistentStore';
 
 export interface StoredSubscription {
   endpoint: string;
@@ -13,6 +14,11 @@ export interface StoredSubscription {
 
 const subs = new Map<string, StoredSubscription>();
 let vapidConfigured = false;
+const KEY_PREFIX = 'push:subscription';
+
+function keyFor(endpoint: string): string {
+  return `${KEY_PREFIX}:${encodeURIComponent(endpoint)}`;
+}
 
 function ensureVapid(): boolean {
   if (vapidConfigured) return true;
@@ -25,20 +31,28 @@ function ensureVapid(): boolean {
   return true;
 }
 
-export function addSubscription(sub: PushSubscription): void {
+export async function addSubscription(sub: PushSubscription): Promise<void> {
   if (!sub?.endpoint || !sub?.keys?.p256dh || !sub?.keys?.auth) return;
-  subs.set(sub.endpoint, {
+  const stored = {
     endpoint: sub.endpoint,
     keys: { p256dh: sub.keys.p256dh, auth: sub.keys.auth },
     createdAt: new Date().toISOString(),
-  });
+  };
+  subs.set(sub.endpoint, stored);
+  await storeSet(keyFor(sub.endpoint), stored);
 }
 
-export function removeSubscription(endpoint: string): void {
+export async function removeSubscription(endpoint: string): Promise<void> {
   subs.delete(endpoint);
+  await storeDel(keyFor(endpoint));
 }
 
-export function listSubscriptions(): StoredSubscription[] {
+export async function listSubscriptions(): Promise<StoredSubscription[]> {
+  const keys = await storeKeys(`${KEY_PREFIX}:*`);
+  const persisted = await Promise.all(keys.map((key) => storeGet<StoredSubscription>(key)));
+  for (const sub of persisted) {
+    if (sub?.endpoint) subs.set(sub.endpoint, sub);
+  }
   return Array.from(subs.values());
 }
 
@@ -58,7 +72,7 @@ export async function sendPushToAll(payload: PushPayload): Promise<{ sent: numbe
   let sent = 0;
   let removed = 0;
 
-  const all = Array.from(subs.values());
+  const all = await listSubscriptions();
   await Promise.all(
     all.map(async (s) => {
       try {
@@ -70,7 +84,7 @@ export async function sendPushToAll(payload: PushPayload): Promise<{ sent: numbe
       } catch (e) {
         const err = e as WebPushError;
         if (err.statusCode === 404 || err.statusCode === 410) {
-          subs.delete(s.endpoint);
+          await removeSubscription(s.endpoint);
           removed++;
         }
       }

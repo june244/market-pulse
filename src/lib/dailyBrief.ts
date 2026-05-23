@@ -6,6 +6,7 @@
  */
 
 import Anthropic from '@anthropic-ai/sdk';
+import { storeGet, storeSet } from './persistentStore';
 
 export interface BriefTickerSnapshot {
   symbol: string;
@@ -38,13 +39,19 @@ export interface BriefOutput {
 }
 
 const cache = new Map<string, BriefOutput>();
+const KEY_PREFIX = 'dailyBrief';
 
-export function getBriefCached(dateKey: string): BriefOutput | null {
-  return cache.get(dateKey) ?? null;
+export async function getBriefCached(dateKey: string): Promise<BriefOutput | null> {
+  const memory = cache.get(dateKey);
+  if (memory) return memory;
+  const persisted = await storeGet<BriefOutput>(`${KEY_PREFIX}:${dateKey}`);
+  if (persisted) cache.set(dateKey, persisted);
+  return persisted;
 }
 
-export function setBriefCached(dateKey: string, brief: BriefOutput): void {
+export async function setBriefCached(dateKey: string, brief: BriefOutput): Promise<void> {
   cache.set(dateKey, brief);
+  await storeSet(`${KEY_PREFIX}:${dateKey}`, brief);
 }
 
 const SYSTEM_PROMPT = `당신은 한국어로 작성하는 시장 브리핑 작성자입니다.
@@ -133,6 +140,6 @@ export async function generateBrief(input: BriefInput): Promise<BriefOutput> {
     date: input.date,
     cached: false,
   };
-  setBriefCached(input.date, brief);
+  await setBriefCached(input.date, brief);
   return brief;
 }

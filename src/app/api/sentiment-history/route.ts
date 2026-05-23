@@ -63,7 +63,7 @@ export async function GET(req: NextRequest) {
 
   const [analystTrend, snapshots] = await Promise.all([
     fetchAnalystTrend(symbol),
-    Promise.resolve(getSnapshotsFor(symbol, days)),
+    getSnapshotsFor(symbol, days),
   ]);
 
   const redditDaily = snapshots.map((s: DailySentimentSnapshot) => ({

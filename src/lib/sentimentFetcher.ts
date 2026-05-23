@@ -166,14 +166,14 @@ export async function fetchAndRecord(symbol: string): Promise<SentimentEntry> {
     fetchedAt: new Date().toISOString(),
   };
   try {
-    recordSnapshot({
+    await recordSnapshot({
       symbol,
       redditMentions: reddit?.mentions ?? 0,
       redditScoreSum: reddit?.scoreSum ?? 0,
       analystMean: entry.analyst?.mean ?? null,
       analystTotal: entry.analyst?.total ?? 0,
     });
-    recordSeenTicker(symbol);
+    await recordSeenTicker(symbol);
   } catch {
     // non-critical
   }

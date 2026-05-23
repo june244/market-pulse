@@ -272,7 +272,7 @@ export async function GET(request: NextRequest) {
   // Record today's snapshot for calendar heatmap
   const tnxQuote = macro.find((m) => m.symbol === '^TNX');
   const dxyQuote = macro.find((m) => m.symbol === 'DX-Y.NYB');
-  recordSnapshot({
+  await recordSnapshot({
     fg: fearGreed?.score ?? null,
     vix: vixQuote?.price ?? null,
     tnxChange: tnxQuote?.changePercent ?? null,

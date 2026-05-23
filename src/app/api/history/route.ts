@@ -146,7 +146,7 @@ async function backfillFromAPIs() {
       const tnxChange = tnxMap.get(date) ?? null;
       const dxyChange = dxyMap.get(date) ?? null;
 
-      backfillIfMissing(date, {
+      await backfillIfMissing(date, {
         date,
         composite: computeComposite(fg, vix, tnxChange, dxyChange),
         fg,
@@ -168,7 +168,7 @@ export async function GET() {
     // Backfill from external APIs (once per server lifecycle)
     await backfillFromAPIs();
 
-    const store = getSnapshots();
+    const store = await getSnapshots();
 
     // Build date range: 3 months ago (1st of month) → today
     const now = new Date();

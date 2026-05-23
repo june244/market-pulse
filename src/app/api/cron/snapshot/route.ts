@@ -38,7 +38,7 @@ async function handle(req: NextRequest) {
     if (auth !== `Bearer ${secret}`) return unauthorized();
   }
 
-  const symbols = getSeenTickers();
+  const symbols = await getSeenTickers();
   if (symbols.length === 0) {
     return NextResponse.json({ ok: true, snapshots: 0, symbols: [], note: 'no tickers tracked yet' });
   }
@@ -51,7 +51,7 @@ async function handle(req: NextRequest) {
     const settled = await Promise.allSettled(
       batch.map(async (sym) => {
         const entry = await fetchAndRecord(sym);
-        setCached(sym, entry);
+        await setCached(sym, entry);
         return sym;
       })
     );
@@ -85,15 +85,15 @@ async function handle(req: NextRequest) {
       })
       .filter((e: BriefEvent) => e.daysUntil >= 0 && e.daysUntil <= 3);
 
-    const tickers = (market.tickers ?? []).map((t: any) => {
-      const s = getCached(t.symbol);
+    const tickers = await Promise.all((market.tickers ?? []).map(async (t: any) => {
+      const s = await getCached(t.symbol);
       return {
         symbol: t.symbol,
         changePercent: t.changePercent,
         analystMean: s?.analyst?.mean ?? null,
         redditMentions: s?.reddit?.mentions ?? null,
       };
-    });
+    }));
 
     const input: BriefInput = {
       date: todayET(),
@@ -108,7 +108,7 @@ async function handle(req: NextRequest) {
       upcomingEvents,
     };
     const brief = await generateBrief(input);
-    setBriefCached(input.date, brief);
+    await setBriefCached(input.date, brief);
     briefOk = true;
   } catch (e: any) {
     briefError = e?.message || 'brief generation failed';
@@ -126,7 +126,7 @@ async function handle(req: NextRequest) {
       y.setDate(y.getDate() - 1);
       return y.toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
     })();
-    const yesterdayDay = getSnapshots().get(yKey);
+    const yesterdayDay = (await getSnapshots()).get(yKey);
     const fgRating = (score: number | null): string => {
       if (score == null) return 'unknown';
       if (score <= 24) return 'extreme fear';
@@ -139,7 +139,7 @@ async function handle(req: NextRequest) {
       ? { fearGreed: { score: yesterdayDay.fg, rating: fgRating(yesterdayDay.fg) } }
       : null;
 
-    const anomalies = detectAnomalies({
+    const anomalies = await detectAnomalies({
       market: {
         fearGreed: market.fearGreed ?? null,
         vix: market.vix ?? null,

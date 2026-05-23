@@ -74,8 +74,26 @@ vercel
 
 ### 환경 변수
 
-현재는 무료 API만 사용하므로 환경 변수 불필요.
-추후 유료 API 전환 시:
+Google 로그인, Claude 브리프, Push, 영속 저장소 사용 시:
+
+```env
+AUTH_GOOGLE_ID=your_google_client_id
+AUTH_GOOGLE_SECRET=your_google_client_secret
+AUTH_SECRET=your_nextauth_secret
+ANTHROPIC_API_KEY=your_anthropic_key
+VAPID_PUBLIC_KEY=your_vapid_public_key
+VAPID_PRIVATE_KEY=your_vapid_private_key
+NEXT_PUBLIC_VAPID_PUBLIC_KEY=your_vapid_public_key
+UPSTASH_REDIS_REST_URL=your_upstash_redis_rest_url
+UPSTASH_REDIS_REST_TOKEN=your_upstash_redis_rest_token
+# Vercel KV 변수명을 쓰는 경우 아래 이름도 지원됩니다.
+KV_REST_API_URL=your_vercel_kv_rest_api_url
+KV_REST_API_TOKEN=your_vercel_kv_rest_api_token
+```
+
+`UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN` 또는 `KV_REST_API_URL` / `KV_REST_API_TOKEN`이 없으면 로컬 개발용 메모리 저장소로 fallback됩니다. 배포 환경에서 다른 기기 간 동일 데이터를 쓰려면 Redis/KV 환경 변수를 반드시 설정해야 합니다.
+
+추후 유료 시장 데이터 API 전환 시:
 
 ```env
 ALPHA_VANTAGE_KEY=your_key

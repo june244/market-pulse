@@ -33,13 +33,13 @@ export async function GET(req: NextRequest) {
 
   await Promise.all(
     symbols.map(async (symbol) => {
-      const cached = getCached(symbol);
+      const cached = await getCached(symbol);
       if (cached) {
         result[symbol] = cached;
         return;
       }
       const entry = await fetchAndRecord(symbol);
-      setCached(symbol, entry);
+      await setCached(symbol, entry);
       result[symbol] = entry;
     })
   );

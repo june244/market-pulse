@@ -36,15 +36,15 @@ async function gatherInput(origin: string, symbols: string[]): Promise<BriefInpu
     })
     .filter((e: BriefEvent) => e.daysUntil >= 0 && e.daysUntil <= 3);
 
-  const tickerSnapshots = (market.tickers ?? []).map((t: any) => {
-    const sentiment = getCached(t.symbol);
+  const tickerSnapshots = await Promise.all((market.tickers ?? []).map(async (t: any) => {
+    const sentiment = await getCached(t.symbol);
     return {
       symbol: t.symbol,
       changePercent: t.changePercent,
       analystMean: sentiment?.analyst?.mean ?? null,
       redditMentions: sentiment?.reddit?.mentions ?? null,
     };
-  });
+  }));
 
   return {
     date: todayET(),
@@ -63,7 +63,7 @@ async function gatherInput(origin: string, symbols: string[]): Promise<BriefInpu
   };
 }
 
-function parseSymbols(req: NextRequest): string[] {
+async function parseSymbols(req: NextRequest): Promise<string[]> {
   const param = req.nextUrl.searchParams.get('symbols') ?? '';
   if (param) {
     return param
@@ -71,7 +71,7 @@ function parseSymbols(req: NextRequest): string[] {
       .map((s) => s.trim().toUpperCase())
       .filter((s) => s && /^[A-Z][A-Z0-9.\-^]{0,9}$/.test(s));
   }
-  return getSeenTickers().slice(0, 12);
+  return (await getSeenTickers()).slice(0, 12);
 }
 
 export async function GET(req: NextRequest) {
@@ -79,13 +79,13 @@ export async function GET(req: NextRequest) {
   const dateKey = todayET();
 
   if (!force) {
-    const cached = getBriefCached(dateKey);
+    const cached = await getBriefCached(dateKey);
     if (cached) {
       return NextResponse.json({ ...cached, cached: true });
     }
   }
 
-  const symbols = parseSymbols(req);
+  const symbols = await parseSymbols(req);
   if (symbols.length === 0) {
     return NextResponse.json({ error: 'no symbols' }, { status: 400 });
   }
