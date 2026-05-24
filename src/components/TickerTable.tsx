@@ -515,6 +515,8 @@ interface Props {
   onDelete?: (symbol: string) => void;
 }
 
+type WatchlistView = 'all' | 'tracking' | 'watching';
+
 const CONFETTI_COLORS = ['#00ff87', '#ffd700', '#00aaff', '#ff3366', '#ffaa00'];
 
 async function saveUserDataPatch(patch: Record<string, unknown>) {
@@ -547,6 +549,7 @@ function spawnConfetti(container: HTMLElement) {
 function TickerTable({ tickers, loading, tickerOrder, onReorder, onDelete }: Props) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [allTrades, setAllTrades] = useState<Record<string, Trade[]>>({});
+  const [watchlistView, setWatchlistView] = useState<WatchlistView>('all');
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const [sentiments, setSentiments] = useState<Record<string, SentimentEntry>>({});
   const [historySymbol, setHistorySymbol] = useState<string | null>(null);
@@ -608,6 +611,24 @@ function TickerTable({ tickers, loading, tickerOrder, onReorder, onDelete }: Pro
         return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi);
       })
     : tickers, [tickers, tickerOrder]);
+
+  const watchlistCounts = useMemo(() => {
+    let tracking = 0;
+    let watching = 0;
+    for (const t of sortedTickers) {
+      if ((allTrades[t.symbol] ?? []).length > 0) tracking++;
+      else watching++;
+    }
+    return { all: sortedTickers.length, tracking, watching };
+  }, [allTrades, sortedTickers]);
+
+  const visibleTickers = useMemo(() => {
+    if (watchlistView === 'all') return sortedTickers;
+    return sortedTickers.filter((t) => {
+      const hasTrades = (allTrades[t.symbol] ?? []).length > 0;
+      return watchlistView === 'tracking' ? hasTrades : !hasTrades;
+    });
+  }, [allTrades, sortedTickers, watchlistView]);
 
   // Aggregate portfolio summary: totals + donut segments + trade stats
   const portfolioSummary = useMemo(() => {
@@ -938,6 +959,16 @@ function TickerTable({ tickers, loading, tickerOrder, onReorder, onDelete }: Pro
   const value = portfolioSummary ? splitDecimal(portfolioSummary.totalValue) : null;
   const dailyUp = portfolioSummary ? portfolioSummary.totalDailyChange >= 0 : true;
   const totalUp = portfolioSummary ? portfolioSummary.returnPct >= 0 : true;
+  const viewLabel = watchlistView === 'tracking'
+    ? 'Tracking'
+    : watchlistView === 'watching'
+      ? 'Watching'
+      : 'Watchlist';
+  const viewEmptyLabel = watchlistView === 'tracking'
+    ? '거래 내역이 있는 종목이 없습니다'
+    : watchlistView === 'watching'
+      ? '관찰 중인 종목이 없습니다'
+      : '티커를 추가해주세요';
 
   return (
     <div data-no-swipe className="opacity-0 animate-fade-in stagger-2">
@@ -1070,6 +1101,89 @@ function TickerTable({ tickers, loading, tickerOrder, onReorder, onDelete }: Pro
         <RiskSummaryPanel risk={portfolioSummary.risk} />
       )}
 
+      {/* ── Watchlist view switch ── */}
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: '72px 1fr',
+          borderBottom: '1px solid var(--text-primary)',
+          minHeight: '84px',
+        }}
+      >
+        <div
+          style={{
+            borderRight: '1px solid var(--text-primary)',
+            display: 'flex',
+            flexDirection: 'column',
+          }}
+        >
+          {([
+            { key: 'all' as const, label: 'All', count: watchlistCounts.all },
+            { key: 'tracking' as const, label: 'Track', count: watchlistCounts.tracking },
+            { key: 'watching' as const, label: 'Watch', count: watchlistCounts.watching },
+          ]).map((item) => {
+            const active = watchlistView === item.key;
+            return (
+              <button
+                key={item.key}
+                type="button"
+                onClick={() => setWatchlistView(item.key)}
+                style={{
+                  flex: 1,
+                  minHeight: '28px',
+                  border: 'none',
+                  borderBottom: item.key !== 'watching' ? '1px solid var(--bg-tertiary)' : undefined,
+                  background: active ? 'var(--text-primary)' : 'transparent',
+                  color: active ? 'var(--bg-primary)' : 'var(--text-secondary)',
+                  cursor: 'pointer',
+                  fontFamily: 'JetBrains Mono, monospace',
+                  fontSize: '8px',
+                  letterSpacing: 0,
+                  textTransform: 'uppercase',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: '4px',
+                  padding: '0 7px',
+                }}
+                title={item.key === 'tracking' ? '거래 내역이 있는 종목' : item.key === 'watching' ? '거래 없이 관찰만 하는 종목' : '전체 등록 종목'}
+              >
+                <span>{item.label}</span>
+                <span>{item.count}</span>
+              </button>
+            );
+          })}
+        </div>
+
+        <div style={{ padding: '9px 12px', display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: '4px' }}>
+          <div
+            style={{
+              fontFamily: 'JetBrains Mono, monospace',
+              fontSize: '9px',
+              letterSpacing: 0,
+              textTransform: 'uppercase',
+              color: 'var(--text-secondary)',
+            }}
+          >
+            {viewLabel}
+          </div>
+          <div
+            style={{
+              fontFamily: 'Inter Tight, sans-serif',
+              fontSize: '13px',
+              color: 'var(--text-primary)',
+              lineHeight: 1.35,
+            }}
+          >
+            {watchlistView === 'tracking'
+              ? '거래 내역이 있는 등록 종목만 봅니다.'
+              : watchlistView === 'watching'
+                ? '아직 거래를 입력하지 않은 관찰 종목입니다.'
+                : '등록한 모든 종목입니다.'}
+          </div>
+        </div>
+      </div>
+
       {/* ── Holdings table header (n-tbl hdr) ── */}
       <div
         style={{
@@ -1086,7 +1200,7 @@ function TickerTable({ tickers, loading, tickerOrder, onReorder, onDelete }: Pro
         }}
       >
         <span>#</span>
-        <span>Holding</span>
+        <span>{viewLabel}</span>
         <span style={{ textAlign: 'right' }}>Value</span>
         <span style={{ textAlign: 'right' }}>P/L</span>
       </div>
@@ -1096,7 +1210,23 @@ function TickerTable({ tickers, loading, tickerOrder, onReorder, onDelete }: Pro
         onPointerUp={handleDragEnd}
         onPointerCancel={handleDragEnd}
       >
-        {sortedTickers.map((t, i) => {
+        {visibleTickers.length === 0 && (
+          <div
+            style={{
+              padding: '32px 16px',
+              borderBottom: '1px solid var(--bg-tertiary)',
+              textAlign: 'center',
+              fontFamily: 'JetBrains Mono, monospace',
+              fontSize: '9px',
+              letterSpacing: 0,
+              textTransform: 'uppercase',
+              color: 'var(--text-secondary)',
+            }}
+          >
+            {viewEmptyLabel}
+          </div>
+        )}
+        {visibleTickers.map((t, i) => {
           const isUp = t.change >= 0;
           const isOpen = expanded.has(t.symbol);
           const symbolTrades = allTrades[t.symbol] || [];
