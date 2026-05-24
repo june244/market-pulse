@@ -26,6 +26,15 @@ export interface BriefPortfolioSnapshot {
   totalValue: number;
   dailyChange: number;
   dailyChangePercent: number;
+  risk: {
+    score: number;
+    label: string;
+    topHolding: { symbol: string; weight: number } | null;
+    topThreeWeight: number;
+    effectivePositions: number;
+    highVolWeight: number;
+    highVolSymbols: string[];
+  } | null;
   leaders: { symbol: string; amount: number; changePercent: number }[];
   laggards: { symbol: string; amount: number; changePercent: number }[];
 }
@@ -72,6 +81,7 @@ const SYSTEM_PROMPT = `당신은 한국어로 작성하는 시장 브리핑 작�
 - 톤은 시니어 트레이더가 친구에게 짧게 정리해주는 느낌. 정보 밀도 높고 군더더기 없음.
 - 핵심만: Fear&Greed/VIX 분위기 + 매크로 흐름 한 줄, 그리고 포트폴리오 일일 손익을 움직인 종목 1~2개.
 - 포트폴리오 데이터가 있으면 총 일일 P/L(%와 금액), 가장 크게 기여한 종목/발목 잡은 종목을 우선 언급.
+- 리스크 데이터가 있으면 TOP1/TOP3 집중도, 유효 종목수, 고변동 비중 중 위험한 항목만 짧게 언급.
 - 다가오는 earnings/dividend가 있으면 D-N 형태로 짚을 것 (예: NVDA 어닝 D-3).
 - 분석가 mean이 매우 강한 매수(1.0~1.5) 또는 매도(4.0+) 신호이거나 Reddit 멘션이 큰 종목은 언급.
 - 숫자는 반올림. 불필요한 인사말("안녕하세요" 등), 면책 문구, 마크다운, 이모지, 따옴표 사용 금지.
@@ -115,6 +125,15 @@ function summarizeInput(input: BriefInput): string {
     }
     if (p.laggards.length > 0) {
       lines.push(`차감: ${p.laggards.map((x) => `${x.symbol} ${x.amount >= 0 ? '+' : ''}$${x.amount.toFixed(0)} (${x.changePercent >= 0 ? '+' : ''}${x.changePercent.toFixed(1)}%)`).join(', ')}`);
+    }
+    if (p.risk) {
+      const top = p.risk.topHolding
+        ? `TOP1 ${p.risk.topHolding.symbol} ${p.risk.topHolding.weight.toFixed(0)}%`
+        : 'TOP1 없음';
+      const highVol = p.risk.highVolSymbols.length > 0
+        ? `HIGH VOL ${p.risk.highVolWeight.toFixed(0)}% (${p.risk.highVolSymbols.slice(0, 2).join('/')})`
+        : `HIGH VOL ${p.risk.highVolWeight.toFixed(0)}%`;
+      lines.push(`리스크: ${p.risk.label} ${p.risk.score}, ${top}, TOP3 ${p.risk.topThreeWeight.toFixed(0)}%, 유효종목 ${p.risk.effectivePositions.toFixed(1)}, ${highVol}`);
     }
   }
 

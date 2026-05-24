@@ -18,12 +18,27 @@ function startOfDayUTC(d: Date): number {
   return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
 }
 
+function computeAnnualizedVol(sparkline?: number[]): number | null {
+  if (!sparkline || sparkline.length < 6) return null;
+  const returns: number[] = [];
+  for (let i = 1; i < sparkline.length; i++) {
+    const prev = sparkline[i - 1];
+    const cur = sparkline[i];
+    if (prev > 0 && cur > 0) returns.push((cur - prev) / prev);
+  }
+  if (returns.length < 5) return null;
+  const avg = returns.reduce((sum, r) => sum + r, 0) / returns.length;
+  const variance = returns.reduce((sum, r) => sum + Math.pow(r - avg, 2), 0) / returns.length;
+  return Math.sqrt(variance) * Math.sqrt(52) * 100;
+}
+
 function buildPortfolioSnapshot(marketTickers: any[], userData: UserData | null): BriefPortfolioSnapshot | null {
   if (!userData) return null;
 
   let totalValue = 0;
   let dailyChange = 0;
   const contributors: { symbol: string; amount: number; changePercent: number }[] = [];
+  const positions: { symbol: string; value: number; vol: number | null }[] = [];
 
   for (const ticker of marketTickers) {
     const trades = userData.trades[ticker.symbol] ?? [];
@@ -35,6 +50,11 @@ function buildPortfolioSnapshot(marketTickers: any[], userData: UserData | null)
     const amount = ticker.change * position.totalQty;
     totalValue += value;
     dailyChange += amount;
+    positions.push({
+      symbol: ticker.symbol,
+      value,
+      vol: computeAnnualizedVol(ticker.sparkline),
+    });
     contributors.push({
       symbol: ticker.symbol,
       amount,
@@ -46,11 +66,40 @@ function buildPortfolioSnapshot(marketTickers: any[], userData: UserData | null)
 
   const prevValue = totalValue - dailyChange;
   const dailyChangePercent = prevValue > 0 ? (dailyChange / prevValue) * 100 : 0;
+  const weights = positions
+    .map((p) => ({
+      symbol: p.symbol,
+      weight: totalValue > 0 ? (p.value / totalValue) * 100 : 0,
+      vol: p.vol,
+    }))
+    .sort((a, b) => b.weight - a.weight);
+  const topHolding = weights[0] ? { symbol: weights[0].symbol, weight: weights[0].weight } : null;
+  const topThreeWeight = weights.slice(0, 3).reduce((sum, w) => sum + w.weight, 0);
+  const hhi = weights.reduce((sum, w) => sum + Math.pow(w.weight / 100, 2), 0);
+  const effectivePositions = hhi > 0 ? 1 / hhi : 0;
+  const highVol = weights.filter((w) => (w.vol ?? 0) >= 45);
+  const highVolWeight = highVol.reduce((sum, w) => sum + w.weight, 0);
+
+  const concentrationRisk = topHolding ? Math.max(0, (topHolding.weight - 25) * 1.2) : 0;
+  const topThreeRisk = Math.max(0, (topThreeWeight - 60) * 0.7);
+  const breadthRisk = Math.max(0, (4 - effectivePositions) * 8);
+  const volatilityRisk = highVolWeight * 0.35;
+  const riskScore = Math.round(Math.min(100, concentrationRisk + topThreeRisk + breadthRisk + volatilityRisk));
+  const riskLabel = riskScore >= 70 ? 'High' : riskScore >= 40 ? 'Medium' : 'Balanced';
 
   return {
     totalValue,
     dailyChange,
     dailyChangePercent,
+    risk: {
+      score: riskScore,
+      label: riskLabel,
+      topHolding,
+      topThreeWeight,
+      effectivePositions,
+      highVolWeight,
+      highVolSymbols: highVol.map((w) => w.symbol),
+    },
     leaders: contributors.filter((c) => c.amount > 0).sort((a, b) => b.amount - a.amount).slice(0, 2),
     laggards: contributors.filter((c) => c.amount < 0).sort((a, b) => a.amount - b.amount).slice(0, 2),
   };
