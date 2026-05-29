@@ -15,6 +15,8 @@ import PortfolioRoast from '@/components/PortfolioRoast';
 import MarketThermometer from '@/components/MarketThermometer';
 import DailyBrief from '@/components/DailyBrief';
 import { signOutAction } from '@/lib/authActions';
+import { CurrencyProvider } from '@/hooks/useCurrency';
+import CurrencyToggle from '@/components/CurrencyToggle';
 
 const CoinTab = dynamic(() => import('@/components/CoinTab'), {
   ssr: false,
@@ -205,6 +207,7 @@ export default function Home() {
   const vixData = useMemo(() => data?.vix ?? null, [data]);
   const macroData = useMemo(() => data?.macro ?? EMPTY_MACRO, [data]);
   const tickersData = useMemo(() => data?.tickers ?? EMPTY_TICKERS, [data]);
+  const usdKrwRate = useMemo(() => data?.exchangeRate?.usdKrw ?? null, [data]);
 
   // ── Shake to refresh (mobile) ──
   useEffect(() => {
@@ -389,14 +392,15 @@ export default function Home() {
   }, [tabIndex]);
 
   return (
+    <CurrencyProvider rate={usdKrwRate}>
     <main className="relative z-10 min-h-screen px-4 py-6 pb-20 md:pb-6 max-w-5xl mx-auto">
       {/* Header */}
       <header
         className="relative z-[100] mb-6 opacity-0 animate-fade-in"
         style={{ borderBottom: '1px solid var(--text-primary)', paddingBottom: '10px' }}
       >
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center flex-shrink-0">
             <div
               onClick={handleHeaderTap}
               className="cursor-pointer select-none"
@@ -414,22 +418,8 @@ export default function Home() {
                 borderRadius: '50%',
               }} />
             </div>
-            <span
-              onClick={handleHeaderTap}
-              className="cursor-pointer select-none"
-              style={{
-                fontFamily: 'JetBrains Mono, monospace',
-                fontSize: '9px',
-                letterSpacing: '0.22em',
-                textTransform: 'uppercase',
-                color: 'var(--text-secondary)',
-                whiteSpace: 'nowrap',
-              }}
-            >
-              Market Pulse
-            </span>
           </div>
-          <div className="flex items-center gap-1.5" style={{ flexShrink: 0 }}>
+          <div className="flex min-w-0 items-center justify-end gap-1.5" style={{ flexShrink: 1 }}>
             {lastRefresh && (
               <span style={{
                 fontFamily: 'JetBrains Mono, monospace',
@@ -465,6 +455,7 @@ export default function Home() {
             >
               ↺
             </button>
+            <CurrencyToggle />
             <ThemePicker current={theme} onChange={handleThemeChange} />
             <TickerEditor tickers={tickers} onUpdate={handleTickerUpdate} />
             <form action={signOutAction}>
@@ -587,5 +578,6 @@ export default function Home() {
         />
       )}
     </main>
+    </CurrencyProvider>
   );
 }

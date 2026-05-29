@@ -47,11 +47,16 @@ export interface MacroItem {
   changePercent: number;
 }
 
+export interface ExchangeRate {
+  usdKrw: number | null;
+}
+
 export interface MarketData {
   fearGreed: FearGreedData | null;
   vix: VIXData | null;
   macro: MacroItem[];
   tickers: TickerData[];
+  exchangeRate: ExchangeRate;
   updatedAt: string;
 }
 

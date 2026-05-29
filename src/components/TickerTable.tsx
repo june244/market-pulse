@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { TickerData, Trade } from '@/lib/types';
 import { formatNumber, formatVolume, formatMarketCap, loadTrades, saveTrades, calcPosition } from '@/lib/utils';
+import { useCurrency } from '@/hooks/useCurrency';
 import TradeManager from './TradeManager';
 import SentimentHistoryModal from './SentimentHistoryModal';
 
@@ -480,13 +481,14 @@ function RiskSummaryPanel({
 
 // --- Day Range Bar ---
 function DayRangeBar({ low, high, current }: { low: number; high: number; current: number }) {
+  const { format } = useCurrency();
   const range = high - low || 1;
   const pct = Math.min(100, Math.max(0, ((current - low) / range) * 100));
   const upper = pct >= 50;
 
   return (
     <div className="flex items-center gap-2 w-full">
-      <span className="text-[11px] font-display text-text-dim shrink-0">${formatNumber(low)}</span>
+      <span className="text-[11px] font-display text-text-dim shrink-0">{format(low)}</span>
       <div className="flex-1 h-1.5 bg-bg-primary rounded-full relative overflow-hidden">
         <div className={`absolute inset-y-0 left-0 rounded-full ${upper ? 'bg-accent-green/40' : 'bg-accent-red/40'}`} style={{ width: `${pct}%` }} />
         <div
@@ -494,7 +496,7 @@ function DayRangeBar({ low, high, current }: { low: number; high: number; curren
           style={{ left: `calc(${pct}% - 5px)` }}
         />
       </div>
-      <span className="text-[11px] font-display text-text-dim shrink-0">${formatNumber(high)}</span>
+      <span className="text-[11px] font-display text-text-dim shrink-0">{format(high)}</span>
     </div>
   );
 }
@@ -547,6 +549,7 @@ function spawnConfetti(container: HTMLElement) {
 }
 
 function TickerTable({ tickers, loading, tickerOrder, onReorder, onDelete }: Props) {
+  const { currency, format } = useCurrency();
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [allTrades, setAllTrades] = useState<Record<string, Trade[]>>({});
   const [watchlistView, setWatchlistView] = useState<WatchlistView>('all');
@@ -988,8 +991,14 @@ function TickerTable({ tickers, loading, tickerOrder, onReorder, onDelete }: Pro
             Portfolio Value
           </div>
           <div style={{ fontSize: '36px', fontWeight: 300, letterSpacing: '-0.03em', lineHeight: 1, color: 'var(--text-primary)' }}>
-            ${value.int}
-            <sup style={{ fontSize: '14px', color: 'var(--text-secondary)' }}>.{value.dec}</sup>
+            {currency === 'USD' ? (
+              <>
+                ${value.int}
+                <sup style={{ fontSize: '14px', color: 'var(--text-secondary)' }}>.{value.dec}</sup>
+              </>
+            ) : (
+              format(portfolioSummary.totalValue, { decimals: 0 })
+            )}
           </div>
           <div
             style={{
@@ -1001,7 +1010,7 @@ function TickerTable({ tickers, loading, tickerOrder, onReorder, onDelete }: Pro
             }}
           >
             <span style={{ color: dailyUp ? 'var(--accent-green)' : 'var(--accent-red)' }}>
-              {dailyUp ? '↗' : '↘'} {dailyUp ? '+' : ''}${formatNumber(portfolioSummary.totalDailyChange)} ({dailyUp ? '+' : ''}{formatNumber(portfolioSummary.dailyChangePct)}%)
+              {dailyUp ? '↗' : '↘'} {format(portfolioSummary.totalDailyChange, { signed: true })} ({dailyUp ? '+' : ''}{formatNumber(portfolioSummary.dailyChangePct)}%)
             </span>
             <span style={{ color: 'var(--text-secondary)' }}>
               total {totalUp ? '+' : ''}{formatNumber(portfolioSummary.returnPct)}%
@@ -1051,7 +1060,7 @@ function TickerTable({ tickers, loading, tickerOrder, onReorder, onDelete }: Pro
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', borderBottom: '1px solid var(--text-primary)' }}>
           <StatCell
             k="평가손익"
-            v={`${portfolioSummary.totalPL >= 0 ? '+' : ''}$${formatNumber(portfolioSummary.totalPL)}`}
+            v={format(portfolioSummary.totalPL, { signed: true })}
             color={portfolioSummary.totalPL >= 0 ? 'var(--accent-green)' : 'var(--accent-red)'}
             borderRight
             borderBottom
@@ -1064,7 +1073,7 @@ function TickerTable({ tickers, loading, tickerOrder, onReorder, onDelete }: Pro
             borderBottom
           />
           <StatCell k="승률" v={`${portfolioSummary.wins} / ${portfolioSummary.total}`} borderRight />
-          <StatCell k="투자원금" v={`$${formatNumber(portfolioSummary.totalInvested)}`} />
+          <StatCell k="투자원금" v={format(portfolioSummary.totalInvested)} />
         </div>
       )}
 
@@ -1449,9 +1458,7 @@ function TickerTable({ tickers, loading, tickerOrder, onReorder, onDelete }: Pro
                           color: 'var(--text-primary)',
                         }}
                       >
-                        {positionValue !== null
-                          ? `$${formatNumber(positionValue)}`
-                          : `$${formatNumber(t.price)}`}
+                        {positionValue !== null ? format(positionValue) : format(t.price)}
                       </span>
 
                       {/* P/L% (or 24h change% if no position) */}
@@ -1486,16 +1493,16 @@ function TickerTable({ tickers, loading, tickerOrder, onReorder, onDelete }: Pro
                           <div>
                             <span className="text-[11px] text-text-dim font-display block mb-0.5">등락</span>
                             <span className={`text-sm font-display font-semibold ${isUp ? 'text-accent-green' : 'text-accent-red'}`}>
-                              {isUp ? '+' : ''}${formatNumber(t.change)}
+                              {format(t.change, { signed: true })}
                             </span>
                           </div>
                           <div>
                             <span className="text-[11px] text-text-dim font-display block mb-0.5">시가</span>
-                            <span className="text-sm font-display font-medium text-text-primary">${formatNumber(t.open)}</span>
+                            <span className="text-sm font-display font-medium text-text-primary">{format(t.open)}</span>
                           </div>
                           <div>
                             <span className="text-[11px] text-text-dim font-display block mb-0.5">전일 종가</span>
-                            <span className="text-sm font-display font-medium text-text-primary">${formatNumber(t.prevClose)}</span>
+                            <span className="text-sm font-display font-medium text-text-primary">{format(t.prevClose)}</span>
                           </div>
                           <div>
                             <span className="text-[11px] text-text-dim font-display block mb-0.5">거래량</span>

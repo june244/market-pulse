@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react';
+import { useCurrency } from '@/hooks/useCurrency';
 
 interface ChartPoint {
   timestamp: number;
@@ -43,6 +44,7 @@ function formatDate(ts: number): string {
 
 // --- Mini area chart via SVG ---
 function CoinChart({ data, color, id }: { data: ChartPoint[]; color: string; id: string }) {
+  const { format } = useCurrency();
   const containerRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
   const [tooltip, setTooltip] = useState<{ x: number; y: number; price: number; date: string } | null>(null);
@@ -161,7 +163,7 @@ function CoinChart({ data, color, id }: { data: ChartPoint[]; color: string; id:
           <circle cx={tooltip.x} cy={tooltip.y} r="4" fill={color} stroke="var(--bg-primary)" strokeWidth="2" />
           <rect x={tooltip.x - 40} y={tooltip.y - 28} width="80" height="20" rx="4" fill="var(--bg-tertiary)" stroke="rgba(255,255,255,0.1)" strokeWidth="0.5" />
           <text x={tooltip.x} y={tooltip.y - 15} textAnchor="middle" fill="var(--text-primary)" fontSize="10" fontFamily="'JetBrains Mono', monospace" fontWeight="500">
-            ${formatPrice(tooltip.price)}
+            {format(tooltip.price, { decimals: tooltip.price >= 1000 ? 0 : 2 })}
           </text>
         </>
       )}
@@ -172,6 +174,7 @@ function CoinChart({ data, color, id }: { data: ChartPoint[]; color: string; id:
 
 // --- Coin card ---
 function CoinCard({ coin, loading }: { coin: CoinData | null; loading: boolean }) {
+  const { format } = useCurrency();
   if (loading || !coin) {
     return (
       <div className="bg-bg-secondary rounded-2xl p-5 card-hover">
@@ -207,7 +210,7 @@ function CoinCard({ coin, loading }: { coin: CoinData | null; loading: boolean }
           </div>
         </div>
         <div className="text-right">
-          <p className="font-mono text-lg font-bold text-text-primary">${formatPrice(coin.currentPrice)}</p>
+          <p className="font-mono text-lg font-bold text-text-primary">{format(coin.currentPrice, { decimals: coin.currentPrice >= 1000 ? 0 : 2 })}</p>
           <p className={`font-mono text-xs font-medium ${isUp ? 'text-accent-green' : 'text-accent-red'}`}>
             {isUp ? '▲' : '▼'} {formatPercent(coin.changePercent)}
           </p>

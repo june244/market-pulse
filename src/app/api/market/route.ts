@@ -226,10 +226,12 @@ export async function GET(request: NextRequest) {
   // Batch VIX + macro + user tickers into one API call
   const macroSymbols = Object.keys(MACRO_SYMBOLS);
   const macroSet = new Set(macroSymbols);
+  const FX_SYMBOL = 'KRW=X';
   const allSymbols = [
     '^VIX',
+    FX_SYMBOL,
     ...macroSymbols,
-    ...userTickers.filter((t) => t !== '^VIX' && !macroSet.has(t)),
+    ...userTickers.filter((t) => t !== '^VIX' && t !== FX_SYMBOL && !macroSet.has(t)),
   ];
 
   const [fearGreed, quotes, historical] = await Promise.all([
@@ -255,8 +257,10 @@ export async function GET(request: NextRequest) {
     })
     .filter((m): m is MacroItem => m !== null);
 
+  const fxQuote = quotes.find((q: any) => q.symbol === FX_SYMBOL);
+
   const tickerQuotes = quotes.filter(
-    (q: any) => q.symbol !== '^VIX' && !macroSet.has(q.symbol)
+    (q: any) => q.symbol !== '^VIX' && q.symbol !== FX_SYMBOL && !macroSet.has(q.symbol)
   );
 
   // Merge historical data into ticker data
@@ -291,6 +295,9 @@ export async function GET(request: NextRequest) {
         : null,
       macro,
       tickers: tickersWithReturns,
+      exchangeRate: {
+        usdKrw: fxQuote?.price ?? null,
+      },
       updatedAt: new Date().toISOString(),
     },
     {

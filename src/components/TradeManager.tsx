@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { Trade } from '@/lib/types';
 import { formatNumber, calcPosition } from '@/lib/utils';
+import { useCurrency } from '@/hooks/useCurrency';
 
 interface Props {
   symbol: string;
@@ -13,6 +14,7 @@ interface Props {
 }
 
 export default function TradeManager({ symbol, currentPrice, trades, onAddTrade, onDeleteTrade }: Props) {
+  const { format } = useCurrency();
   const [showForm, setShowForm] = useState(false);
   const [showAll, setShowAll] = useState(false);
   const [tradeType, setTradeType] = useState<'buy' | 'sell'>('buy');
@@ -60,7 +62,7 @@ export default function TradeManager({ symbol, currentPrice, trades, onAddTrade,
           <div>
             <span className="text-[11px] text-text-dim font-display block mb-0.5">평균단가</span>
             <span className="text-sm font-display font-semibold text-text-primary">
-              ${formatNumber(avgCost)}
+              {format(avgCost)}
             </span>
           </div>
           <div>
@@ -72,7 +74,7 @@ export default function TradeManager({ symbol, currentPrice, trades, onAddTrade,
           <div>
             <span className="text-[11px] text-text-dim font-display block mb-0.5">평가손익</span>
             <span className={`text-sm font-display font-bold ${unrealizedPL >= 0 ? 'text-accent-blue' : 'text-accent-red'}`}>
-              {unrealizedPL >= 0 ? '+' : ''}{formatNumber(unrealizedPL)}$
+              {format(unrealizedPL, { signed: true })}
             </span>
           </div>
           <div>
@@ -88,7 +90,7 @@ export default function TradeManager({ symbol, currentPrice, trades, onAddTrade,
         <div className="flex items-center gap-2">
           <span className="text-[11px] text-text-dim font-display">실현손익</span>
           <span className={`text-xs font-display font-bold ${realizedPL >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
-            {realizedPL >= 0 ? '+' : ''}{formatNumber(realizedPL)}$
+            {format(realizedPL, { signed: true })}
           </span>
         </div>
       )}
@@ -281,7 +283,7 @@ export default function TradeManager({ symbol, currentPrice, trades, onAddTrade,
               >
                 {trade.type === 'buy' ? '매수' : '매도'}
               </span>
-              <span className="text-xs font-display text-text-primary">${formatNumber(trade.price)}</span>
+              <span className="text-xs font-display text-text-primary">{format(trade.price)}</span>
               <span className="text-xs font-display text-text-secondary">&times;{formatNumber(trade.quantity, trade.quantity % 1 === 0 ? 0 : 4)}</span>
               <div className="flex-1" />
               <button
