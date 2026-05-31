@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { generateBrief, getBriefCached, BriefInput, BriefEvent, BriefPortfolioSnapshot } from '@/lib/dailyBrief';
+import { generateBrief, getBriefCached, BriefInput, BriefEvent, BriefPortfolioSnapshot, BriefTickerNarrative } from '@/lib/dailyBrief';
 import { getCached } from '@/lib/sentimentCache';
 import { getSeenTickers } from '@/lib/sentimentStore';
 import { auth } from '@/auth';
 import { getUserData, UserData } from '@/lib/userDataStore';
+import { getBriefingPrefs } from '@/lib/briefingPrefs';
 import { calcPosition } from '@/lib/utils';
 
 export const runtime = 'nodejs';
@@ -110,7 +111,7 @@ function briefCacheKey(dateKey: string, email: string | null, symbols: string[])
   return `${dateKey}:${scope}`;
 }
 
-async function gatherInput(origin: string, symbols: string[], userData: UserData | null, cacheKey: string): Promise<BriefInput> {
+async function gatherInput(origin: string, symbols: string[], userData: UserData | null, cacheKey: string, symbolSet: Set<string>): Promise<BriefInput> {
   const symParam = symbols.join(',');
   const headers: Record<string, string> = {};
   if (process.env.AUTH_SECRET) headers['x-internal-key'] = process.env.AUTH_SECRET;
@@ -142,6 +143,16 @@ async function gatherInput(origin: string, symbols: string[], userData: UserData
     };
   }));
 
+  const prefs = await getBriefingPrefs();
+  const tickerNarratives: BriefTickerNarrative[] = Object.entries(prefs.narratives ?? {})
+    .filter(([sym]) => symbolSet.has(sym.toUpperCase()))
+    .map(([sym, n]) => ({
+      symbol: sym.toUpperCase(),
+      narrative: n.narrative,
+      thesis: n.thesis,
+      monitoring: n.monitoring,
+    }));
+
   return {
     date: todayET(),
     cacheKey,
@@ -158,6 +169,8 @@ async function gatherInput(origin: string, symbols: string[], userData: UserData
     tickers: tickerSnapshots,
     upcomingEvents,
     portfolio: buildPortfolioSnapshot(marketTickers, userData),
+    philosophy: prefs.philosophy,
+    tickerNarratives,
   };
 }
 
@@ -195,7 +208,8 @@ export async function GET(req: NextRequest) {
 
   try {
     const origin = new URL(req.url).origin;
-    const input = await gatherInput(origin, symbols, userData, cacheKey);
+    const symbolSet = new Set(symbols.map((s) => s.toUpperCase()));
+    const input = await gatherInput(origin, symbols, userData, cacheKey, symbolSet);
     const brief = await generateBrief(input);
     return NextResponse.json(brief);
   } catch (e: any) {

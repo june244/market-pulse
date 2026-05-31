@@ -2,11 +2,12 @@ import { NextRequest, NextResponse } from 'next/server';
 import { fetchAndRecord } from '@/lib/sentimentFetcher';
 import { setCached } from '@/lib/sentimentCache';
 import { getSeenTickers } from '@/lib/sentimentStore';
-import { generateBrief, setBriefCached, BriefInput, BriefEvent } from '@/lib/dailyBrief';
+import { generateBrief, setBriefCached, BriefInput, BriefEvent, BriefTickerNarrative } from '@/lib/dailyBrief';
 import { getCached } from '@/lib/sentimentCache';
 import { detectAnomalies, highSeverity } from '@/lib/anomalyDetector';
 import { sendPushToAll } from '@/lib/pushStore';
 import { getSnapshots } from '@/lib/historyStore';
+import { getBriefingPrefs } from '@/lib/briefingPrefs';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -95,6 +96,17 @@ async function handle(req: NextRequest) {
       };
     }));
 
+    const prefs = await getBriefingPrefs();
+    const symbolSet = new Set(briefSymbols.map((s) => s.toUpperCase()));
+    const tickerNarratives: BriefTickerNarrative[] = Object.entries(prefs.narratives ?? {})
+      .filter(([sym]) => symbolSet.has(sym.toUpperCase()))
+      .map(([sym, n]) => ({
+        symbol: sym.toUpperCase(),
+        narrative: n.narrative,
+        thesis: n.thesis,
+        monitoring: n.monitoring,
+      }));
+
     const input: BriefInput = {
       date: todayET(),
       cacheKey: `${todayET()}:cron`,
@@ -107,6 +119,8 @@ async function handle(req: NextRequest) {
       macro: (market.macro ?? []).map((m: any) => ({ label: m.label, changePercent: m.changePercent })),
       tickers,
       upcomingEvents,
+      philosophy: prefs.philosophy,
+      tickerNarratives,
       portfolio: null,
     };
     const brief = await generateBrief(input);

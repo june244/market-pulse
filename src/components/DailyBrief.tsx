@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { subscribeToPush, getSubscriptionStatus, isPushSupported } from '@/lib/pushClient';
+import BriefingPrefsModal from './BriefingPrefsModal';
 
 interface BriefResponse {
   text: string;
@@ -33,6 +34,7 @@ export default function DailyBrief({ symbols }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [pushStatus, setPushStatus] = useState<'subscribed' | 'unsubscribed' | 'unsupported' | 'denied' | 'loading'>('loading');
   const [pushBusy, setPushBusy] = useState(false);
+  const [prefsOpen, setPrefsOpen] = useState(false);
 
   const fetchBrief = useCallback(async (force: boolean) => {
     setLoading(true);
@@ -116,25 +118,44 @@ export default function DailyBrief({ symbols }: Props) {
             </span>
           )}
         </div>
-        <button
-          onClick={() => fetchBrief(true)}
-          disabled={loading}
-          style={{
-            background: 'transparent',
-            border: '1px solid var(--text-secondary)',
-            padding: '3px 7px',
-            color: 'var(--text-secondary)',
-            cursor: loading ? 'wait' : 'pointer',
-            fontFamily: 'JetBrains Mono, monospace',
-            fontSize: '8px',
-            letterSpacing: '0.12em',
-            textTransform: 'uppercase',
-            opacity: loading ? 0.4 : 1,
-          }}
-          title="다시 생성"
-        >
-          ↻
-        </button>
+        <div style={{ display: 'flex', gap: '4px' }}>
+          <button
+            onClick={() => setPrefsOpen(true)}
+            style={{
+              background: 'transparent',
+              border: '1px solid var(--text-secondary)',
+              padding: '3px 7px',
+              color: 'var(--text-secondary)',
+              cursor: 'pointer',
+              fontFamily: 'JetBrains Mono, monospace',
+              fontSize: '8px',
+              letterSpacing: '0.12em',
+              textTransform: 'uppercase',
+            }}
+            title="브리핑 철학 / 종목 내러티브 편집"
+          >
+            ⚙
+          </button>
+          <button
+            onClick={() => fetchBrief(true)}
+            disabled={loading}
+            style={{
+              background: 'transparent',
+              border: '1px solid var(--text-secondary)',
+              padding: '3px 7px',
+              color: 'var(--text-secondary)',
+              cursor: loading ? 'wait' : 'pointer',
+              fontFamily: 'JetBrains Mono, monospace',
+              fontSize: '8px',
+              letterSpacing: '0.12em',
+              textTransform: 'uppercase',
+              opacity: loading ? 0.4 : 1,
+            }}
+            title="다시 생성"
+          >
+            ↻
+          </button>
+        </div>
       </div>
 
       {loading && !brief && (
@@ -173,6 +194,14 @@ export default function DailyBrief({ symbols }: Props) {
         }}>
           {brief.text}
         </p>
+      )}
+
+      {prefsOpen && (
+        <BriefingPrefsModal
+          symbols={symbols}
+          onClose={() => setPrefsOpen(false)}
+          onSaved={() => fetchBrief(true)}
+        />
       )}
 
       {brief && showPushButton && (

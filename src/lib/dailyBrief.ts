@@ -39,6 +39,13 @@ export interface BriefPortfolioSnapshot {
   laggards: { symbol: string; amount: number; changePercent: number }[];
 }
 
+export interface BriefTickerNarrative {
+  symbol: string;
+  narrative: string;
+  thesis?: string;
+  monitoring?: string;
+}
+
 export interface BriefInput {
   date: string;
   cacheKey?: string;
@@ -48,6 +55,10 @@ export interface BriefInput {
   tickers: BriefTickerSnapshot[];
   upcomingEvents: BriefEvent[];
   portfolio: BriefPortfolioSnapshot | null;
+  /** User's investment philosophy — injected into the system prompt. */
+  philosophy?: string;
+  /** Per-ticker narrative + thesis mapping for holdings the user cares about. */
+  tickerNarratives?: BriefTickerNarrative[];
 }
 
 export interface BriefOutput {
@@ -73,23 +84,53 @@ export async function setBriefCached(dateKey: string, brief: BriefOutput): Promi
   await storeSet(`${KEY_PREFIX}:${dateKey}`, brief);
 }
 
-const SYSTEM_PROMPT = `당신은 한국어로 작성하는 시장 브리핑 작성자입니다.
-입력으로 시장 지표와 종목 데이터를 받아 사용자에게 보여줄 2~3문장 짜리 데일리 브리핑을 만듭니다.
+const SYSTEM_PROMPT = `당신은 한국어로 작성하는 시장 브리핑 작성자다. 사용자의 투자 철학을 받아 그 렌즈로 해석한 2~4문장 데일리 브리핑을 만든다.
 
-규칙:
-- 반드시 한국어, 2~3문장, 총 200자 이내.
-- 톤은 시니어 트레이더가 친구에게 짧게 정리해주는 느낌. 정보 밀도 높고 군더더기 없음.
-- 핵심만: Fear&Greed/VIX 분위기 + 매크로 흐름 한 줄, 그리고 포트폴리오 일일 손익을 움직인 종목 1~2개.
-- 포트폴리오 데이터가 있으면 총 일일 P/L(%와 금액), 가장 크게 기여한 종목/발목 잡은 종목을 우선 언급.
-- 리스크 데이터가 있으면 TOP1/TOP3 집중도, 유효 종목수, 고변동 비중 중 위험한 항목만 짧게 언급.
-- 다가오는 earnings/dividend가 있으면 D-N 형태로 짚을 것 (예: NVDA 어닝 D-3).
-- 분석가 mean이 매우 강한 매수(1.0~1.5) 또는 매도(4.0+) 신호이거나 Reddit 멘션이 큰 종목은 언급.
-- 숫자는 반올림. 불필요한 인사말("안녕하세요" 등), 면책 문구, 마크다운, 이모지, 따옴표 사용 금지.
-- 출력은 본문만. 라벨이나 헤더 없이 문장으로 시작.`;
+## 사용자 투자 철학 (반드시 이 관점으로 해석)
+
+장기 관점에서 회사의 미래 실행력과 내러티브 정합성이 핵심이다. 단기 가격 변동, 집중도/변동성/포트 수익률 같은 단편적 정량 리스크는 이 사용자에게 노이즈다 — 그런 얘기는 하지 마라.
+
+판단 프레임은 NAVS v1.5 + FES 두 차원:
+- **NAVS** = (메가 내러티브 강도 40%) + (병목/대체불가능성 25%) + (수직계열화 15%) + (재무 건전성 10%) + (CEO 리더십 5%) + (모멘텀 5%)
+- **FES (Forward Execution Score)** = (로드맵 명확성) + (마일스톤 달성 시 가치) + (실행력 트랙레코드)
+
+핵심 질문은 항상: **"이 회사가 약속을 지키고 있는가? 내러티브 테제가 강화되고 있는가, 훼손되고 있는가?"**
+
+## 작성 규칙
+
+- 한국어, 2~4문장, 총 280자 이내.
+- 매일 변하는 가격·일일 P/L·집중도 점수를 메인으로 깔지 말 것. 사용자는 이미 본다.
+- 대신 다음을 우선 다룬다:
+  1. **내러티브별 클러스터링**: 보유 종목을 사용자가 부여한 내러티브(AI/SPACE/COIN/양자 등)로 묶어 해당 테마의 흐름과 연결.
+  2. **실행 시그널**: 어닝, 마일스톤, 가이던스 변화, 경영진 발언, 분석가 등급 변경 — 이것이 *테제를 강화/훼손* 하는지 평가.
+  3. **모니터링 포인트 트리거**: 사용자가 적어둔 monitoring 항목과 오늘의 데이터가 맞닿으면 명시.
+  4. **다가오는 이벤트**: 어닝/배당 D-N — 이게 테제 검증의 분기점인지 짚을 것.
+- 매크로(F&G, VIX, 금리, 달러)는 *내러티브에 미치는 영향* 관점에서만 1줄. 단순 수치 나열 금지.
+- 분석가 mean이 강한 매수(1.0~1.5) 또는 매도(4.0+)면 "테제 강화/약화 시그널" 맥락으로 언급.
+- 출력은 본문만. 인사말, 면책, 마크다운, 이모지, 따옴표, 헤더 라벨 모두 금지. 평서문으로 시작.
+- 데이터가 비어있으면 무리하게 채우지 말고 알고 있는 것만 다룬다.`;
 
 function summarizeInput(input: BriefInput): string {
   const lines: string[] = [];
   lines.push(`날짜: ${input.date}`);
+
+  if (input.philosophy && input.philosophy.trim()) {
+    lines.push('');
+    lines.push('## 사용자 추가 메모 (철학 보완)');
+    lines.push(input.philosophy.trim());
+    lines.push('');
+  }
+
+  if (input.tickerNarratives && input.tickerNarratives.length > 0) {
+    lines.push('## 종목별 내러티브 & 테제');
+    for (const n of input.tickerNarratives) {
+      const parts: string[] = [n.narrative];
+      if (n.thesis) parts.push(`테제: ${n.thesis}`);
+      if (n.monitoring) parts.push(`모니터링: ${n.monitoring}`);
+      lines.push(`  ${n.symbol} — ${parts.join(' / ')}`);
+    }
+    lines.push('');
+  }
 
   if (input.fearGreed) {
     lines.push(`Fear&Greed: ${input.fearGreed.score} (${input.fearGreed.rating})`);
