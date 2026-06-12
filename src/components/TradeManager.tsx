@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { Trade } from '@/lib/types';
 import { formatNumber, calcPosition } from '@/lib/utils';
 import { useCurrency } from '@/hooks/useCurrency';
+import { formatMoney } from '@/lib/currency';
 
 interface Props {
   symbol: string;
@@ -14,7 +15,7 @@ interface Props {
 }
 
 export default function TradeManager({ symbol, currentPrice, trades, onAddTrade, onDeleteTrade }: Props) {
-  const { format } = useCurrency();
+  const { format, currency } = useCurrency();
   const [showForm, setShowForm] = useState(false);
   const [showAll, setShowAll] = useState(false);
   const [tradeType, setTradeType] = useState<'buy' | 'sell'>('buy');
@@ -59,27 +60,27 @@ export default function TradeManager({ symbol, currentPrice, trades, onAddTrade,
       {/* Position summary */}
       {totalQty > 0 && (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-          <div>
+          <div className="min-w-0">
             <span className="text-[11px] text-text-dim font-display block mb-0.5">평균단가</span>
-            <span className="text-sm font-display font-semibold text-text-primary">
+            <span className="text-sm font-display font-semibold text-text-primary block truncate tabular-nums">
               {format(avgCost)}
             </span>
           </div>
-          <div>
+          <div className="min-w-0">
             <span className="text-[11px] text-text-dim font-display block mb-0.5">보유수량</span>
-            <span className="text-sm font-display font-semibold text-text-primary">
+            <span className="text-sm font-display font-semibold text-text-primary block truncate tabular-nums">
               {formatNumber(totalQty, totalQty % 1 === 0 ? 0 : 4)}
             </span>
           </div>
-          <div>
+          <div className="min-w-0">
             <span className="text-[11px] text-text-dim font-display block mb-0.5">평가손익</span>
-            <span className={`text-sm font-display font-bold ${unrealizedPL >= 0 ? 'text-accent-blue' : 'text-accent-red'}`}>
+            <span className={`text-sm font-display font-bold block truncate tabular-nums ${unrealizedPL >= 0 ? 'text-accent-blue' : 'text-accent-red'}`}>
               {format(unrealizedPL, { signed: true })}
             </span>
           </div>
-          <div>
+          <div className="min-w-0">
             <span className="text-[11px] text-text-dim font-display block mb-0.5">수익률</span>
-            <span className={`text-sm font-display font-bold ${returnPct >= 0 ? 'text-accent-blue' : 'text-accent-red'}`}>
+            <span className={`text-sm font-display font-bold block truncate tabular-nums ${returnPct >= 0 ? 'text-accent-blue' : 'text-accent-red'}`}>
               {returnPct >= 0 ? '+' : ''}{formatNumber(returnPct)}%
             </span>
           </div>
@@ -88,8 +89,8 @@ export default function TradeManager({ symbol, currentPrice, trades, onAddTrade,
 
       {realizedPL !== 0 && (
         <div className="flex items-center gap-2">
-          <span className="text-[11px] text-text-dim font-display">실현손익</span>
-          <span className={`text-xs font-display font-bold ${realizedPL >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
+          <span className="text-[11px] text-text-dim font-display shrink-0">실현손익</span>
+          <span className={`text-xs font-display font-bold truncate tabular-nums ${realizedPL >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
             {format(realizedPL, { signed: true })}
           </span>
         </div>
@@ -177,21 +178,23 @@ export default function TradeManager({ symbol, currentPrice, trades, onAddTrade,
 
           {/* Price + Quantity */}
           <div style={{ display: 'flex', gap: '6px' }}>
-            <div style={{ position: 'relative', flex: 1 }}>
+            <div style={{ position: 'relative', flex: 1, minWidth: 0 }}>
               <span style={{
                 position: 'absolute', left: '8px', top: '50%', transform: 'translateY(-50%)',
                 fontFamily: 'JetBrains Mono, monospace', fontSize: '10px',
                 color: 'var(--text-secondary)',
+                pointerEvents: 'none',
               }}>$</span>
               <input
                 type="number"
                 inputMode="decimal"
                 step="any"
-                placeholder="가격"
+                placeholder="가격 (USD)"
                 value={price}
                 onChange={(e) => setPrice(e.target.value)}
                 style={{
                   width: '100%',
+                  boxSizing: 'border-box',
                   paddingLeft: '20px',
                   paddingRight: '8px',
                   paddingTop: '6px',
@@ -214,6 +217,8 @@ export default function TradeManager({ symbol, currentPrice, trades, onAddTrade,
               onChange={(e) => setQuantity(e.target.value)}
               style={{
                 flex: 1,
+                minWidth: 0,
+                boxSizing: 'border-box',
                 padding: '6px 8px',
                 border: '1px solid var(--bg-tertiary)',
                 background: 'transparent',
@@ -224,6 +229,14 @@ export default function TradeManager({ symbol, currentPrice, trades, onAddTrade,
               }}
             />
           </div>
+          {currency === 'KRW' && (
+            <span style={{
+              fontFamily: 'JetBrains Mono, monospace',
+              fontSize: '9px',
+              color: 'var(--text-dim)',
+              letterSpacing: '0.08em',
+            }}>거래 가격은 USD 기준으로 입력하세요</span>
+          )}
 
           {/* Save / Cancel */}
           <div style={{ display: 'flex', gap: '6px' }}>
@@ -283,8 +296,8 @@ export default function TradeManager({ symbol, currentPrice, trades, onAddTrade,
               >
                 {trade.type === 'buy' ? '매수' : '매도'}
               </span>
-              <span className="text-xs font-display text-text-primary">{format(trade.price)}</span>
-              <span className="text-xs font-display text-text-secondary">&times;{formatNumber(trade.quantity, trade.quantity % 1 === 0 ? 0 : 4)}</span>
+              <span className="text-xs font-display text-text-primary tabular-nums truncate">{formatMoney(trade.price, 'USD', null)}</span>
+              <span className="text-xs font-display text-text-secondary tabular-nums shrink-0">&times;{formatNumber(trade.quantity, trade.quantity % 1 === 0 ? 0 : 4)}</span>
               <div className="flex-1" />
               <button
                 type="button"
