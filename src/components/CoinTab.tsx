@@ -172,20 +172,20 @@ function CoinChart({ data, color, id }: { data: ChartPoint[]; color: string; id:
   );
 }
 
-// --- Coin card ---
+// --- Coin card (Nordic editorial) ---
 function CoinCard({ coin, loading }: { coin: CoinData | null; loading: boolean }) {
   const { format } = useCurrency();
   if (loading || !coin) {
     return (
-      <div className="bg-bg-secondary rounded-2xl p-5 card-hover">
-        <div className="flex items-center justify-between mb-4">
-          <div className="animate-pulse bg-bg-tertiary rounded h-6 w-24" />
-          <div className="animate-pulse bg-bg-tertiary rounded h-6 w-32" />
+      <div style={{ padding: '12px 0', borderBottom: '1px solid var(--text-primary)' }}>
+        <div className="flex items-center justify-between mb-3">
+          <div className="animate-pulse" style={{ height: '12px', width: '80px', background: 'var(--bg-tertiary)' }} />
+          <div className="animate-pulse" style={{ height: '20px', width: '120px', background: 'var(--bg-tertiary)' }} />
         </div>
-        <div className="animate-pulse bg-bg-tertiary rounded-xl h-[200px] mb-4" />
-        <div className="flex gap-2">
+        <div className="animate-pulse mb-3" style={{ height: '160px', background: 'var(--bg-tertiary)' }} />
+        <div className="grid grid-cols-4 gap-0" style={{ borderTop: '1px solid var(--bg-tertiary)' }}>
           {[1, 2, 3, 4].map((i) => (
-            <div key={i} className="animate-pulse bg-bg-tertiary rounded-lg h-14 flex-1" />
+            <div key={i} className="animate-pulse" style={{ height: '32px', background: 'var(--bg-tertiary)', margin: '4px' }} />
           ))}
         </div>
       </div>
@@ -194,53 +194,92 @@ function CoinCard({ coin, loading }: { coin: CoinData | null; loading: boolean }
 
   const isUp = coin.changePercent >= 0;
   const accentColor = isUp ? 'var(--accent-green)' : 'var(--accent-red)';
-  const icon = coin.symbol === 'BTC-USD' ? '₿' : 'Ξ';
+  const iconColor = coin.symbol === 'BTC-USD' ? '#f7931a' : '#627eea';
+  const ticker = coin.symbol.replace('-USD', '');
 
   return (
-    <div data-no-swipe className="bg-bg-secondary rounded-2xl p-5 card-hover opacity-0 animate-fade-in">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-2.5">
-          <span className="text-xl font-bold" style={{ color: coin.symbol === 'BTC-USD' ? '#f7931a' : '#627eea' }}>
-            {icon}
+    <div
+      data-no-swipe
+      className="opacity-0 animate-fade-in"
+      style={{ padding: '12px 0', borderBottom: '1px solid var(--text-primary)' }}
+    >
+      {/* Label row */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <span style={{
+            fontFamily: 'JetBrains Mono, monospace',
+            fontSize: '14px',
+            lineHeight: 1,
+            color: iconColor,
+          }}>{coin.symbol === 'BTC-USD' ? '₿' : 'Ξ'}</span>
+          <span style={{
+            fontFamily: 'JetBrains Mono, monospace',
+            fontSize: '9px',
+            letterSpacing: '0.22em',
+            textTransform: 'uppercase',
+            color: 'var(--text-secondary)',
+          }}>
+            {ticker} · {coin.label}
           </span>
-          <div>
-            <h3 className="text-sm font-display font-semibold text-text-primary">{coin.label}</h3>
-            <span className="text-[10px] text-text-dim font-display">{coin.symbol.replace('-USD', '')}</span>
-          </div>
         </div>
-        <div className="text-right">
-          <p className="font-mono text-lg font-bold text-text-primary">{format(coin.currentPrice, { decimals: coin.currentPrice >= 1000 ? 0 : 2 })}</p>
-          <p className={`font-mono text-xs font-medium ${isUp ? 'text-accent-green' : 'text-accent-red'}`}>
-            {isUp ? '▲' : '▼'} {formatPercent(coin.changePercent)}
-          </p>
+        <div style={{
+          fontFamily: 'JetBrains Mono, monospace',
+          fontSize: '9px',
+          letterSpacing: '0.12em',
+          color: isUp ? 'var(--accent-green)' : 'var(--accent-red)',
+        }}>
+          {isUp ? '↗' : '↘'} {formatPercent(coin.changePercent)}
         </div>
+      </div>
+
+      {/* Big price */}
+      <div style={{
+        fontFamily: 'Inter Tight, sans-serif',
+        fontSize: '32px',
+        fontWeight: 300,
+        lineHeight: 1,
+        letterSpacing: '-0.03em',
+        color: 'var(--text-primary)',
+        marginBottom: '12px',
+      }}>
+        {format(coin.currentPrice, { decimals: coin.currentPrice >= 1000 ? 0 : 2 })}
       </div>
 
       {/* Chart */}
-      <div className="relative h-[200px] mb-4 overflow-hidden p-1" style={{ border: '1px solid var(--bg-tertiary)' }}>
+      <div className="relative h-[160px] overflow-hidden" style={{ marginBottom: '10px' }}>
         <CoinChart data={coin.chart} color={accentColor} id={coin.symbol} />
       </div>
 
-      {/* Period returns */}
-      <div className="grid grid-cols-4 gap-2">
-        {coin.periodReturns.map((pr) => {
+      {/* Period returns — flat 4-cell strip */}
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(4, 1fr)',
+        borderTop: '1px solid var(--bg-tertiary)',
+      }}>
+        {coin.periodReturns.map((pr, i) => {
           const up = pr.changePercent >= 0;
           return (
             <div
               key={pr.period}
-              className="rounded-xl p-2.5 text-center"
-              style={{ backgroundColor: up ? 'var(--accent-green-soft)' : 'var(--accent-red-soft)' }}
+              style={{
+                padding: '8px 6px',
+                textAlign: 'center',
+                borderRight: i < 3 ? '1px solid var(--bg-tertiary)' : 'none',
+              }}
             >
-              <span className="block text-[10px] text-text-dim font-display font-medium mb-1">
-                {pr.period}
-              </span>
-              <span
-                className="block font-mono text-sm font-bold"
-                style={{ color: up ? 'var(--accent-green)' : 'var(--accent-red)' }}
-              >
-                {formatPercent(pr.changePercent)}
-              </span>
+              <div style={{
+                fontFamily: 'JetBrains Mono, monospace',
+                fontSize: '9px',
+                letterSpacing: '0.18em',
+                color: 'var(--text-dim)',
+                marginBottom: '3px',
+              }}>{pr.period}</div>
+              <div style={{
+                fontFamily: 'JetBrains Mono, monospace',
+                fontSize: '11px',
+                fontWeight: 500,
+                color: up ? 'var(--accent-green)' : 'var(--accent-red)',
+              }}>{formatPercent(pr.changePercent)}</div>
             </div>
           );
         })}

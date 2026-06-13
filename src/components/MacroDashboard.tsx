@@ -17,10 +17,13 @@ function MacroDashboard({ macro, loading }: Props) {
   if (loading) {
     if (nordic) {
       return (
-        <div style={{ padding: '8px 0', borderBottom: '1px solid var(--text-primary)', display: 'flex', justifyContent: 'space-between' }}>
-          {[...Array(5)].map((_, i) => (
-            <div key={i} style={{ height: '14px', width: '48px', background: 'var(--bg-tertiary)' }} />
-          ))}
+        <div style={{ padding: '12px 0', borderBottom: '1px solid var(--text-primary)' }}>
+          <div style={{ height: '9px', width: '90px', background: 'var(--bg-tertiary)', marginBottom: '10px' }} />
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0' }}>
+            {[...Array(6)].map((_, i) => (
+              <div key={i} style={{ padding: '8px 6px', height: '50px', background: 'var(--bg-tertiary)', margin: '2px' }} />
+            ))}
+          </div>
         </div>
       );
     }
@@ -37,36 +40,74 @@ function MacroDashboard({ macro, loading }: Props) {
 
   if (nordic) {
     return (
-      <div style={{
-        padding: '8px 0',
-        borderBottom: '1px solid var(--text-primary)',
-        display: 'flex',
-        justifyContent: 'space-between',
-        fontFamily: 'JetBrains Mono, monospace',
-        fontSize: '9px',
-        flexWrap: 'wrap' as const,
-        gap: '4px',
-      }}>
-        {macro.map((m) => {
-          const isUp = m.change >= 0;
-          const isYield = m.symbol === '^TNX';
-          return (
-            <span key={m.symbol}>
-              <b style={{ color: 'var(--text-primary)', marginRight: '3px' }}>{m.label}</b>
-              <i style={{
-                fontStyle: 'normal',
-                color: isUp ? 'var(--accent-green)' : 'var(--accent-red)',
-              }}>
-                {isUp ? '+' : ''}{formatNumber(m.changePercent)}%
-              </i>
-              {isYield && (
-                <i style={{ fontStyle: 'normal', color: 'var(--text-secondary)', marginLeft: '3px' }}>
-                  {formatNumber(m.price)}
-                </i>
-              )}
-            </span>
-          );
-        })}
+      <div style={{ padding: '12px 0', borderBottom: '1px solid var(--text-primary)' }}>
+        <div style={{
+          fontFamily: 'JetBrains Mono, monospace',
+          fontSize: '9px',
+          letterSpacing: '0.22em',
+          textTransform: 'uppercase',
+          color: 'var(--text-secondary)',
+          marginBottom: '10px',
+        }}>
+          Macro Indicators
+        </div>
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(3, 1fr)',
+          border: '1px solid var(--bg-tertiary)',
+        }}>
+          {macro.map((m, i) => {
+            const isUp = m.change >= 0;
+            const isYield = m.symbol === '^TNX';
+            const col = i % 3;
+            const row = Math.floor(i / 3);
+            const totalRows = Math.ceil(macro.length / 3);
+            return (
+              <div
+                key={m.symbol}
+                style={{
+                  padding: '8px 10px',
+                  borderRight: col < 2 ? '1px solid var(--bg-tertiary)' : 'none',
+                  borderBottom: row < totalRows - 1 ? '1px solid var(--bg-tertiary)' : 'none',
+                  minWidth: 0,
+                }}
+              >
+                <div style={{
+                  fontFamily: 'JetBrains Mono, monospace',
+                  fontSize: '9px',
+                  letterSpacing: '0.15em',
+                  color: 'var(--text-dim)',
+                  marginBottom: '4px',
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                }}>
+                  {m.label}
+                </div>
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'baseline',
+                  gap: '4px',
+                  fontFamily: 'JetBrains Mono, monospace',
+                }}>
+                  <span style={{
+                    fontSize: '13px',
+                    fontWeight: 500,
+                    color: isUp ? 'var(--accent-green)' : 'var(--accent-red)',
+                    fontVariantNumeric: 'tabular-nums',
+                  }}>
+                    {isUp ? '+' : ''}{formatNumber(m.changePercent)}%
+                  </span>
+                  {isYield && (
+                    <span style={{ fontSize: '9px', color: 'var(--text-secondary)', fontVariantNumeric: 'tabular-nums' }}>
+                      {formatNumber(m.price)}
+                    </span>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
       </div>
     );
   }

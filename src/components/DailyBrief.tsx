@@ -97,7 +97,6 @@ export default function DailyBrief({ symbols }: Props) {
       style={{
         padding: '12px 0',
         borderBottom: '1px solid var(--text-primary)',
-        marginBottom: '4px',
       }}
     >
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>

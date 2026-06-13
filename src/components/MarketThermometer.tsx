@@ -74,7 +74,7 @@ function MarketThermometerNordic({
   const filledCells = Math.round(composite / 5); // 20 cells total (0-100 / 5)
 
   return (
-    <div style={{ padding: '10px 0', borderBottom: '1px solid var(--text-primary)' }}>
+    <div style={{ padding: '12px 0', borderBottom: '1px solid var(--text-primary)' }}>
       <div style={{
         fontFamily: 'JetBrains Mono, monospace',
         fontSize: '9px',

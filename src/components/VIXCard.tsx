@@ -23,7 +23,7 @@ function VIXCardNordic({ data }: { data: VIXData }) {
     '공포 확산. 역사적으로 과매도 구간 진입 가능성.';
 
   return (
-    <div style={{ padding: '10px 0', borderBottom: '1px solid var(--text-primary)' }}>
+    <div style={{ padding: '12px 0', borderBottom: '1px solid var(--text-primary)' }}>
       <div style={{
         display: 'flex',
         justifyContent: 'space-between',
@@ -32,7 +32,7 @@ function VIXCardNordic({ data }: { data: VIXData }) {
         letterSpacing: '0.22em',
         textTransform: 'uppercase',
         color: 'var(--text-secondary)',
-        marginBottom: '6px',
+        marginBottom: '8px',
       }}>
         <span>CBOE VIX</span>
         <span style={{ color: 'var(--accent-amber)' }}>{vixInfo.labelKR.toUpperCase()}</span>
@@ -97,7 +97,7 @@ function VIXCard({ data, loading }: Props) {
   if (loading || !data) {
     if (nordic) {
       return (
-        <div style={{ padding: '10px 0', borderBottom: '1px solid var(--text-primary)' }}>
+        <div style={{ padding: '12px 0', borderBottom: '1px solid var(--text-primary)' }}>
           <div style={{ height: '9px', width: '80px', background: 'var(--bg-tertiary)', marginBottom: '10px' }} />
           <div style={{ height: '34px', width: '80px', background: 'var(--bg-tertiary)' }} />
         </div>

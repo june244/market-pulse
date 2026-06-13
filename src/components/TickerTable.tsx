@@ -296,6 +296,74 @@ function SentimentPanel({
   );
 }
 
+// --- Reusable expanded-panel helpers (Nordic editorial) ---
+const sectionLabelStyle: React.CSSProperties = {
+  display: 'block',
+  fontFamily: 'JetBrains Mono, monospace',
+  fontSize: '9px',
+  letterSpacing: '0.22em',
+  textTransform: 'uppercase',
+  color: 'var(--text-secondary)',
+  marginBottom: '8px',
+};
+
+const periodLabelStyle: React.CSSProperties = {
+  fontFamily: 'JetBrains Mono, monospace',
+  fontSize: '9px',
+  letterSpacing: '0.18em',
+  color: 'var(--text-dim)',
+  marginBottom: '3px',
+};
+
+function SectionLabel({ children }: { children: React.ReactNode }) {
+  return <span style={sectionLabelStyle}>{children}</span>;
+}
+
+function StatGridCell({
+  label,
+  value,
+  color,
+  accent,
+  muted,
+  borderRight,
+}: {
+  label: string;
+  value: string;
+  color?: string;
+  accent?: boolean;
+  muted?: boolean;
+  borderRight?: boolean;
+}) {
+  return (
+    <div style={{
+      padding: '8px 10px',
+      borderRight: borderRight ? '1px solid var(--bg-tertiary)' : undefined,
+      minWidth: 0,
+    }}>
+      <div style={{
+        fontFamily: 'JetBrains Mono, monospace',
+        fontSize: '9px',
+        letterSpacing: '0.15em',
+        color: 'var(--text-dim)',
+        marginBottom: '4px',
+        whiteSpace: 'nowrap',
+        overflow: 'hidden',
+        textOverflow: 'ellipsis',
+      }}>{label}</div>
+      <div style={{
+        fontFamily: 'JetBrains Mono, monospace',
+        fontSize: accent ? '13px' : '12px',
+        fontWeight: accent ? 500 : 400,
+        color: color ?? (muted ? 'var(--text-secondary)' : 'var(--text-primary)'),
+        fontVariantNumeric: 'tabular-nums',
+        whiteSpace: 'nowrap',
+        overflow: 'hidden',
+        textOverflow: 'ellipsis',
+      }}>{value}</div>
+    </div>
+  );
+}
+
 function splitDecimal(value: number): { int: string; dec: string } {
   const fixed = Math.abs(value).toFixed(2);
   const [intPart, decPart] = fixed.split('.');
@@ -1021,36 +1089,57 @@ function TickerTable({ tickers, loading, tickerOrder, onReorder, onDelete }: Pro
 
       {/* ── Donut + legend (n-donut) ── */}
       {portfolioSummary && portfolioSummary.segments.length > 0 && (
-        <div
-          style={{
+        <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--text-primary)' }}>
+          {/* Allocation stripe — full-width segmented bar */}
+          <div style={{
             display: 'flex',
-            gap: '14px',
-            padding: '10px 16px',
-            borderBottom: '1px solid var(--text-primary)',
-            alignItems: 'center',
-          }}
-        >
-          <DonutChart segments={portfolioSummary.segments} />
-          <div
-            style={{
+            height: '4px',
+            border: '1px solid var(--bg-tertiary)',
+            marginBottom: '12px',
+          }}>
+            {portfolioSummary.segments.map((seg) => (
+              <div
+                key={seg.symbol}
+                title={`${seg.symbol} ${formatNumber(seg.pct, 0)}%`}
+                style={{ width: `${seg.pct}%`, background: seg.color }}
+              />
+            ))}
+          </div>
+
+          <div style={{ display: 'flex', gap: '14px', alignItems: 'center' }}>
+            <DonutChart segments={portfolioSummary.segments} />
+            <div style={{
               flex: 1,
               fontFamily: 'JetBrains Mono, monospace',
               fontSize: '9px',
               display: 'flex',
               flexDirection: 'column',
-              gap: '4px',
-            }}
-          >
-            {portfolioSummary.segments.map((seg) => (
-              <div
-                key={seg.symbol}
-                style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '6px' }}
-              >
-                <i style={{ width: '8px', height: '8px', background: seg.color, flexShrink: 0, display: 'inline-block' }} />
-                <span style={{ flex: 1, color: 'var(--text-secondary)' }}>{seg.symbol}</span>
-                <b style={{ fontWeight: 500, color: 'var(--text-primary)' }}>{formatNumber(seg.pct, 0)}%</b>
-              </div>
-            ))}
+              gap: '6px',
+            }}>
+              {portfolioSummary.segments.map((seg) => (
+                <div key={seg.symbol} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <i style={{ width: '6px', height: '6px', background: seg.color, flexShrink: 0, display: 'inline-block' }} />
+                  <span style={{ minWidth: '34px', color: 'var(--text-secondary)' }}>{seg.symbol}</span>
+                  <div style={{
+                    flex: 1,
+                    height: '2px',
+                    background: 'var(--bg-tertiary)',
+                    position: 'relative',
+                  }}>
+                    <div style={{
+                      position: 'absolute',
+                      inset: 0,
+                      width: `${seg.pct}%`,
+                      background: seg.color,
+                      opacity: 0.7,
+                    }} />
+                  </div>
+                  <b style={{ fontWeight: 500, color: 'var(--text-primary)', fontVariantNumeric: 'tabular-nums', minWidth: '28px', textAlign: 'right' }}>
+                    {formatNumber(seg.pct, 0)}%
+                  </b>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       )}
@@ -1484,61 +1573,57 @@ function TickerTable({ tickers, loading, tickerOrder, onReorder, onDelete }: Pro
                       <div className="px-4 pb-4 pt-3 space-y-3">
                         {/* Day Range Bar */}
                         <div>
-                          <span className="text-[11px] text-text-dim font-display mb-1.5 block">일일 가격 범위</span>
+                          <SectionLabel>일일 가격 범위</SectionLabel>
                           <DayRangeBar low={t.dayLow} high={t.dayHigh} current={t.price} />
                         </div>
 
                         {/* Stats grid */}
-                        <div className="grid grid-cols-3 sm:grid-cols-5 gap-3">
-                          <div>
-                            <span className="text-[11px] text-text-dim font-display block mb-0.5">등락</span>
-                            <span className={`text-sm font-display font-semibold ${isUp ? 'text-accent-green' : 'text-accent-red'}`}>
-                              {format(t.change, { signed: true })}
-                            </span>
-                          </div>
-                          <div>
-                            <span className="text-[11px] text-text-dim font-display block mb-0.5">시가</span>
-                            <span className="text-sm font-display font-medium text-text-primary">{format(t.open)}</span>
-                          </div>
-                          <div>
-                            <span className="text-[11px] text-text-dim font-display block mb-0.5">전일 종가</span>
-                            <span className="text-sm font-display font-medium text-text-primary">{format(t.prevClose)}</span>
-                          </div>
-                          <div>
-                            <span className="text-[11px] text-text-dim font-display block mb-0.5">거래량</span>
-                            <span className="text-sm font-display font-medium text-text-secondary">{formatVolume(t.volume)}</span>
-                          </div>
-                          <div>
-                            <span className="text-[11px] text-text-dim font-display block mb-0.5">시가총액</span>
-                            <span className="text-sm font-display font-medium text-text-primary">{formatMarketCap(t.marketCap)}</span>
-                          </div>
+                        <div className="grid grid-cols-3 sm:grid-cols-5" style={{ border: '1px solid var(--bg-tertiary)' }}>
+                          <StatGridCell label="등락" value={format(t.change, { signed: true })} color={isUp ? 'var(--accent-green)' : 'var(--accent-red)'} accent borderRight />
+                          <StatGridCell label="시가" value={format(t.open)} borderRight />
+                          <StatGridCell label="전일 종가" value={format(t.prevClose)} borderRight />
+                          <StatGridCell label="거래량" value={formatVolume(t.volume)} muted borderRight />
+                          <StatGridCell label="시가총액" value={formatMarketCap(t.marketCap)} />
                         </div>
 
                         {/* Period returns */}
                         {t.periodReturns && (
-                          <div className="pt-3 border-t border-bg-tertiary/50">
-                            <span className="text-[11px] text-text-dim font-display mb-2 block">기간 수익률</span>
-                            <div className="grid grid-cols-4 gap-3">
-                              {PERIOD_KEYS.map((key) => {
+                          <div>
+                            <SectionLabel>기간 수익률</SectionLabel>
+                            <div className="grid grid-cols-4" style={{ border: '1px solid var(--bg-tertiary)' }}>
+                              {PERIOD_KEYS.map((key, idx) => {
                                 const ret = t.periodReturns?.[key];
+                                const borderRight = idx < 3 ? '1px solid var(--bg-tertiary)' : 'none';
                                 if (!ret) {
                                   return (
-                                    <div key={key} className="text-center">
-                                      <span className="text-[11px] text-text-dim font-display block mb-1">{key}</span>
-                                      <span className="text-xs font-display text-text-dim">—</span>
+                                    <div key={key} style={{ padding: '8px 6px', textAlign: 'center', borderRight }}>
+                                      <div style={periodLabelStyle}>{key}</div>
+                                      <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '11px', color: 'var(--text-dim)' }}>—</div>
                                     </div>
                                   );
                                 }
                                 const up = ret.changePercent >= 0;
                                 const barW = Math.min(100, Math.abs(ret.changePercent) * 1.5);
                                 return (
-                                  <div key={key} className="text-center">
-                                    <span className="text-[11px] text-text-dim font-display block mb-1">{key}</span>
-                                    <span className={`text-xs font-display font-bold ${up ? 'text-accent-green' : 'text-accent-red'}`}>
+                                  <div key={key} style={{ padding: '8px 6px', textAlign: 'center', borderRight }}>
+                                    <div style={periodLabelStyle}>{key}</div>
+                                    <div style={{
+                                      fontFamily: 'JetBrains Mono, monospace',
+                                      fontSize: '11px',
+                                      fontWeight: 500,
+                                      color: up ? 'var(--accent-green)' : 'var(--accent-red)',
+                                      fontVariantNumeric: 'tabular-nums',
+                                      marginBottom: '4px',
+                                    }}>
                                       {up ? '+' : ''}{formatNumber(ret.changePercent)}%
-                                    </span>
-                                    <div className="mt-1 h-1 bg-bg-primary rounded-full overflow-hidden">
-                                      <div className={`h-full rounded-full ${up ? 'bg-accent-green/60' : 'bg-accent-red/60'}`} style={{ width: `${barW}%` }} />
+                                    </div>
+                                    <div style={{ height: '2px', background: 'var(--bg-primary)' }}>
+                                      <div style={{
+                                        height: '100%',
+                                        background: up ? 'var(--accent-green)' : 'var(--accent-red)',
+                                        opacity: 0.6,
+                                        width: `${barW}%`,
+                                      }} />
                                     </div>
                                   </div>
                                 );
