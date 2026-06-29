@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { TickerData, Trade } from '@/lib/types';
+import { PositionLabel, TickerData, Trade } from '@/lib/types';
 import { formatNumber, formatVolume, formatMarketCap, loadTrades, saveTrades, calcPosition } from '@/lib/utils';
 import { useCurrency } from '@/hooks/useCurrency';
 import TradeManager from './TradeManager';
@@ -37,6 +37,24 @@ interface SentimentEntry {
 const PERIOD_KEYS = ['1M', '3M', '6M', '1Y'] as const;
 const SWIPE_THRESHOLD = 80;
 const SWIPE_LOCK_THRESHOLD = 10;
+const POSITION_LABELS_KEY = 'market-pulse-position-labels';
+const CASH_BALANCE_KEY = 'market-pulse-cash-usd';
+const CASH_SYMBOL = 'CASH';
+const HOLDING_ROW_COLUMNS = '24px minmax(0, 1fr) 76px minmax(74px, auto) 48px';
+
+const POSITION_LABEL_OPTIONS: { value: PositionLabel; label: string; color: string }[] = [
+  { value: 'WATCH', label: 'WATCH', color: 'var(--text-secondary)' },
+  { value: 'RESEARCH', label: 'RESEARCH', color: 'var(--accent-amber)' },
+  { value: 'GROWTH', label: 'GROWTH', color: 'var(--accent-blue)' },
+  { value: 'CORE', label: 'CORE', color: 'var(--accent-green)' },
+  { value: 'OVERWEIGHT', label: 'OVERWEIGHT', color: 'var(--accent-red)' },
+];
+
+const POSITION_LABEL_MAP = Object.fromEntries(
+  POSITION_LABEL_OPTIONS.map((item) => [item.value, item]),
+) as Record<PositionLabel, { value: PositionLabel; label: string; color: string }>;
+
+type PositionLabels = Record<string, PositionLabel>;
 
 // Nordic palette: hi / up / dn / soft (Other)
 const NORDIC_DONUT_COLORS = [
@@ -45,6 +63,104 @@ const NORDIC_DONUT_COLORS = [
   'var(--accent-red)',
   'var(--text-secondary)',
 ];
+
+function normalizePositionLabel(value: unknown): PositionLabel | null {
+  switch (value) {
+    case 'WATCH':
+    case 'watch':
+    case 'watchlist':
+      return 'WATCH';
+    case 'RESEARCH':
+    case 'research':
+      return 'RESEARCH';
+    case 'GROWTH':
+    case 'growth':
+      return 'GROWTH';
+    case 'CORE':
+    case 'core':
+      return 'CORE';
+    case 'OVERWEIGHT':
+    case 'overweight':
+      return 'OVERWEIGHT';
+    default:
+      return null;
+  }
+}
+
+function cleanPositionLabels(value: unknown): PositionLabels {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  const labels: PositionLabels = {};
+  for (const [rawSymbol, rawLabel] of Object.entries(value)) {
+    const symbol = rawSymbol.trim().toUpperCase();
+    const label = normalizePositionLabel(rawLabel);
+    if (/^[A-Z][A-Z0-9.\-^]{0,9}$/.test(symbol) && label) {
+      labels[symbol] = label;
+    }
+  }
+  return labels;
+}
+
+function loadPositionLabels(): PositionLabels {
+  if (typeof window === 'undefined') return {};
+  try {
+    const saved = localStorage.getItem(POSITION_LABELS_KEY);
+    return saved ? cleanPositionLabels(JSON.parse(saved)) : {};
+  } catch {
+    return {};
+  }
+}
+
+function savePositionLabels(labels: PositionLabels): void {
+  if (typeof window === 'undefined') return;
+  localStorage.setItem(POSITION_LABELS_KEY, JSON.stringify(labels));
+}
+
+function loadCashBalance(): number {
+  if (typeof window === 'undefined') return 0;
+  try {
+    const saved = localStorage.getItem(CASH_BALANCE_KEY);
+    const value = saved ? Number(JSON.parse(saved)) : 0;
+    return Number.isFinite(value) && value > 0 ? value : 0;
+  } catch {
+    return 0;
+  }
+}
+
+function saveCashBalance(value: number): void {
+  if (typeof window === 'undefined') return;
+  localStorage.setItem(CASH_BALANCE_KEY, JSON.stringify(Math.max(0, value)));
+}
+
+function positionLabelFor(labels: PositionLabels, symbol: string): PositionLabel {
+  return labels[symbol] ?? 'WATCH';
+}
+
+function LabelBadge({ label }: { label: PositionLabel }) {
+  const option = POSITION_LABEL_MAP[label];
+  return (
+    <span style={{
+      display: 'inline-flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      boxSizing: 'border-box',
+      width: '76px',
+      fontFamily: 'JetBrains Mono, monospace',
+      fontSize: '8px',
+      lineHeight: 1,
+      letterSpacing: '0.08em',
+      color: option.color,
+      border: `1px solid ${option.color}`,
+      padding: '3px 5px',
+      textTransform: 'uppercase',
+      whiteSpace: 'nowrap',
+      flexShrink: 0,
+      overflow: 'hidden',
+      textOverflow: 'ellipsis',
+    }}>
+      {option.label}
+    </span>
+  );
+}
 
 // --- Donut chart (Nordic FOLIO style: thin 5-stroke, 36 viewBox, r=14) ---
 const DonutChart = React.memo(function DonutChart({
@@ -547,6 +663,179 @@ function RiskSummaryPanel({
   );
 }
 
+function AllocationBreakdown({
+  allocations,
+  cashBalance,
+  onCashBalanceChange,
+}: {
+  allocations: { symbol: string; currentValue: number; weight: number }[];
+  cashBalance: number;
+  onCashBalanceChange: (value: number) => void;
+}) {
+  const { format } = useCurrency();
+
+  return (
+    <div style={{ marginTop: '14px', paddingTop: '12px', borderTop: '1px solid var(--bg-tertiary)' }}>
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          gap: '12px',
+          marginBottom: '10px',
+        }}
+      >
+        <span
+          style={{
+            fontFamily: 'JetBrains Mono, monospace',
+            fontSize: '9px',
+            letterSpacing: '0.22em',
+            textTransform: 'uppercase',
+            color: 'var(--text-secondary)',
+          }}
+        >
+          All Allocation
+        </span>
+        <label style={{ display: 'flex', alignItems: 'center', gap: '6px', minWidth: 0 }}>
+          <span
+            style={{
+              fontFamily: 'JetBrains Mono, monospace',
+              fontSize: '8px',
+              letterSpacing: '0.12em',
+              textTransform: 'uppercase',
+              color: 'var(--text-secondary)',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            Cash USD
+          </span>
+          <input
+            type="number"
+            min="0"
+            step="100"
+            inputMode="decimal"
+            value={cashBalance || ''}
+            onChange={(event) => onCashBalanceChange(Math.max(0, Number(event.target.value) || 0))}
+            placeholder="0"
+            style={{
+              width: '96px',
+              border: '1px solid var(--bg-tertiary)',
+              background: 'transparent',
+              color: 'var(--text-primary)',
+              fontFamily: 'JetBrains Mono, monospace',
+              fontSize: '10px',
+              padding: '5px 6px',
+              outline: 'none',
+              textAlign: 'right',
+            }}
+          />
+        </label>
+      </div>
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+        {allocations.map((item) => (
+          <div key={item.symbol} style={{ display: 'grid', gridTemplateColumns: '44px 1fr 40px 72px', gap: '8px', alignItems: 'center' }}>
+            <span
+              style={{
+                fontFamily: 'JetBrains Mono, monospace',
+                fontSize: '9px',
+                color: item.symbol === CASH_SYMBOL ? 'var(--accent-blue)' : 'var(--text-secondary)',
+              }}
+            >
+              {item.symbol}
+            </span>
+            <div style={{ height: '4px', background: 'var(--bg-tertiary)', overflow: 'hidden' }}>
+              <div
+                style={{
+                  width: `${Math.min(100, Math.max(0, item.weight))}%`,
+                  height: '100%',
+                  background: item.symbol === CASH_SYMBOL ? 'var(--accent-blue)' : 'var(--text-primary)',
+                  opacity: item.symbol === CASH_SYMBOL ? 0.65 : 0.75,
+                }}
+              />
+            </div>
+            <b
+              style={{
+                fontFamily: 'JetBrains Mono, monospace',
+                fontSize: '9px',
+                fontWeight: 500,
+                color: 'var(--text-primary)',
+                textAlign: 'right',
+                fontVariantNumeric: 'tabular-nums',
+              }}
+            >
+              {formatNumber(item.weight, 1)}%
+            </b>
+            <span
+              style={{
+                fontFamily: 'JetBrains Mono, monospace',
+                fontSize: '9px',
+                color: 'var(--text-secondary)',
+                textAlign: 'right',
+                fontVariantNumeric: 'tabular-nums',
+              }}
+            >
+              {format(item.currentValue, { decimals: 0 })}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function CashStarterPanel({
+  cashBalance,
+  onCashBalanceChange,
+}: {
+  cashBalance: number;
+  onCashBalanceChange: (value: number) => void;
+}) {
+  return (
+    <div style={{ padding: '12px 16px', borderTop: '1px solid var(--text-primary)', borderBottom: '1px solid var(--text-primary)' }}>
+      <label style={{ display: 'grid', gridTemplateColumns: '1fr 112px', alignItems: 'center', gap: '12px' }}>
+        <span>
+          <span
+            style={{
+              display: 'block',
+              fontFamily: 'JetBrains Mono, monospace',
+              fontSize: '9px',
+              letterSpacing: '0.22em',
+              textTransform: 'uppercase',
+              color: 'var(--text-secondary)',
+            }}
+          >
+            Cash Asset
+          </span>
+          <span style={{ display: 'block', marginTop: '3px', fontSize: '12px', color: 'var(--text-primary)' }}>
+            달러 현금을 포트폴리오 자산으로 추가합니다.
+          </span>
+        </span>
+        <input
+          type="number"
+          min="0"
+          step="100"
+          inputMode="decimal"
+          value={cashBalance || ''}
+          onChange={(event) => onCashBalanceChange(Math.max(0, Number(event.target.value) || 0))}
+          placeholder="0"
+          style={{
+            width: '100%',
+            border: '1px solid var(--bg-tertiary)',
+            background: 'transparent',
+            color: 'var(--text-primary)',
+            fontFamily: 'JetBrains Mono, monospace',
+            fontSize: '11px',
+            padding: '7px 8px',
+            outline: 'none',
+            textAlign: 'right',
+          }}
+        />
+      </label>
+    </div>
+  );
+}
+
 // --- Day Range Bar ---
 function DayRangeBar({ low, high, current }: { low: number; high: number; current: number }) {
   const { format } = useCurrency();
@@ -620,6 +909,8 @@ function TickerTable({ tickers, loading, tickerOrder, onReorder, onDelete }: Pro
   const { currency, format } = useCurrency();
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [allTrades, setAllTrades] = useState<Record<string, Trade[]>>({});
+  const [positionLabels, setPositionLabels] = useState<PositionLabels>({});
+  const [cashBalance, setCashBalance] = useState(0);
   const [watchlistView, setWatchlistView] = useState<WatchlistView>('all');
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const [sentiments, setSentiments] = useState<Record<string, SentimentEntry>>({});
@@ -639,7 +930,11 @@ function TickerTable({ tickers, loading, tickerOrder, onReorder, onDelete }: Pro
 
   useEffect(() => {
     const localTrades = loadTrades();
+    const localLabels = loadPositionLabels();
+    const localCashBalance = loadCashBalance();
     setAllTrades(localTrades);
+    setPositionLabels(localLabels);
+    setCashBalance(localCashBalance);
 
     let cancelled = false;
     fetch('/api/user-data', { cache: 'no-store' })
@@ -647,11 +942,27 @@ function TickerTable({ tickers, loading, tickerOrder, onReorder, onDelete }: Pro
       .then((remote) => {
         if (cancelled || !remote) return;
         const remoteTrades = remote.trades && typeof remote.trades === 'object' ? remote.trades : {};
+        const remoteLabels = cleanPositionLabels(remote.positionLabels);
+        const remoteCashBalance = typeof remote.cashBalance === 'number' && Number.isFinite(remote.cashBalance) && remote.cashBalance > 0
+          ? remote.cashBalance
+          : 0;
         if (Object.keys(remoteTrades).length > 0) {
           setAllTrades(remoteTrades);
           saveTrades(remoteTrades);
         } else if (Object.keys(localTrades).length > 0) {
           saveUserDataPatch({ trades: localTrades });
+        }
+        if (Object.keys(remoteLabels).length > 0) {
+          setPositionLabels(remoteLabels);
+          savePositionLabels(remoteLabels);
+        } else if (Object.keys(localLabels).length > 0) {
+          saveUserDataPatch({ positionLabels: localLabels });
+        }
+        if (remote.cashBalance !== undefined) {
+          setCashBalance(remoteCashBalance);
+          saveCashBalance(remoteCashBalance);
+        } else if (localCashBalance > 0) {
+          saveUserDataPatch({ cashBalance: localCashBalance });
         }
       })
       .catch(() => {});
@@ -690,8 +1001,8 @@ function TickerTable({ tickers, loading, tickerOrder, onReorder, onDelete }: Pro
       if ((allTrades[t.symbol] ?? []).length > 0) tracking++;
       else watching++;
     }
-    return { all: sortedTickers.length, tracking, watching };
-  }, [allTrades, sortedTickers]);
+    return { all: sortedTickers.length + (cashBalance > 0 ? 1 : 0), tracking, watching };
+  }, [allTrades, cashBalance, sortedTickers]);
 
   const visibleTickers = useMemo(() => {
     if (watchlistView === 'all') return sortedTickers;
@@ -739,20 +1050,27 @@ function TickerTable({ tickers, loading, tickerOrder, onReorder, onDelete }: Pro
       }
     }
 
+    const cashValue = Math.max(0, cashBalance);
+    if (cashValue > 0) hasAny = true;
     if (!hasAny) return null;
 
     const totalPL = totalUnrealized + totalRealized;
     const returnPct = totalInvested > 0 ? (totalPL / totalInvested) * 100 : 0;
-    const prevValue = totalValue - totalDailyChange;
+    const equityValue = totalValue;
+    const totalPortfolioValue = equityValue + cashValue;
+    const prevValue = totalPortfolioValue - totalDailyChange;
     const dailyChangePct = prevValue > 0 ? (totalDailyChange / prevValue) * 100 : 0;
+    const allocationStats = cashValue > 0
+      ? [...symbolStats, { symbol: CASH_SYMBOL, invested: cashValue, currentValue: cashValue, returnPct: 0, vol: null }]
+      : symbolStats;
 
     // Donut segments by current value, top-3 + Other (Nordic palette)
-    const byValue = [...symbolStats].sort((a, b) => b.currentValue - a.currentValue);
+    const byValue = [...allocationStats].sort((a, b) => b.currentValue - a.currentValue);
     let segments: { symbol: string; pct: number; color: string }[];
     if (byValue.length <= 4) {
       segments = byValue.map((s, i) => ({
         symbol: s.symbol,
-        pct: totalValue > 0 ? (s.currentValue / totalValue) * 100 : 0,
+        pct: totalPortfolioValue > 0 ? (s.currentValue / totalPortfolioValue) * 100 : 0,
         color: NORDIC_DONUT_COLORS[i],
       }));
     } else {
@@ -762,16 +1080,21 @@ function TickerTable({ tickers, loading, tickerOrder, onReorder, onDelete }: Pro
       segments = [
         ...top.map((s, i) => ({
           symbol: s.symbol,
-          pct: totalValue > 0 ? (s.currentValue / totalValue) * 100 : 0,
+          pct: totalPortfolioValue > 0 ? (s.currentValue / totalPortfolioValue) * 100 : 0,
           color: NORDIC_DONUT_COLORS[i],
         })),
         {
           symbol: 'Other',
-          pct: totalValue > 0 ? (restValue / totalValue) * 100 : 0,
+          pct: totalPortfolioValue > 0 ? (restValue / totalPortfolioValue) * 100 : 0,
           color: NORDIC_DONUT_COLORS[3],
         },
       ];
     }
+    const allocations = byValue.map((s) => ({
+      symbol: s.symbol,
+      currentValue: s.currentValue,
+      weight: totalPortfolioValue > 0 ? (s.currentValue / totalPortfolioValue) * 100 : 0,
+    }));
 
     // Win rate + best/worst (only among active positions)
     const wins = symbolStats.filter((s) => s.returnPct > 0).length;
@@ -783,10 +1106,10 @@ function TickerTable({ tickers, loading, tickerOrder, onReorder, onDelete }: Pro
       ? symbolStats.reduce((w, s) => s.returnPct < w.returnPct ? s : w)
       : null;
 
-    const weights = symbolStats
+    const weights = allocationStats
       .map((s) => ({
         symbol: s.symbol,
-        weight: totalValue > 0 ? (s.currentValue / totalValue) * 100 : 0,
+        weight: totalPortfolioValue > 0 ? (s.currentValue / totalPortfolioValue) * 100 : 0,
         vol: s.vol,
       }))
       .sort((a, b) => b.weight - a.weight);
@@ -809,9 +1132,9 @@ function TickerTable({ tickers, loading, tickerOrder, onReorder, onDelete }: Pro
         : { label: 'Balanced', color: 'var(--accent-green)' };
 
     return {
-      totalValue, totalInvested, totalUnrealized, totalRealized, totalPL, returnPct,
+      totalValue: totalPortfolioValue, equityValue, cashValue, totalInvested, totalUnrealized, totalRealized, totalPL, returnPct,
       totalDailyChange, dailyChangePct,
-      segments, wins, total: symbolStats.length, winRate, best, worst,
+      segments, allocations, wins, total: symbolStats.length, winRate, best, worst,
       risk: {
         score: riskScore,
         label: riskLevel.label,
@@ -823,7 +1146,7 @@ function TickerTable({ tickers, loading, tickerOrder, onReorder, onDelete }: Pro
         highVolSymbols: highVol.map((w) => w.symbol),
       },
     };
-  }, [allTrades, sortedTickers]);
+  }, [allTrades, cashBalance, sortedTickers]);
 
   const toggle = (symbol: string) => {
     if (dragSymbol) return;
@@ -987,6 +1310,22 @@ function TickerTable({ tickers, loading, tickerOrder, onReorder, onDelete }: Pro
     });
   }, []);
 
+  const handlePositionLabelChange = useCallback((symbol: string, label: PositionLabel) => {
+    setPositionLabels((prev) => {
+      const next = { ...prev, [symbol]: label };
+      savePositionLabels(next);
+      saveUserDataPatch({ positionLabels: next });
+      return next;
+    });
+  }, []);
+
+  const handleCashBalanceChange = useCallback((value: number) => {
+    const next = Number.isFinite(value) && value > 0 ? value : 0;
+    setCashBalance(next);
+    saveCashBalance(next);
+    saveUserDataPatch({ cashBalance: next });
+  }, []);
+
   if (loading) {
     return (
       <div className="opacity-0 animate-fade-in" style={{ borderTop: '1px solid var(--text-primary)' }}>
@@ -1006,23 +1345,23 @@ function TickerTable({ tickers, loading, tickerOrder, onReorder, onDelete }: Pro
     );
   }
 
-  if (tickers.length === 0) {
+  if (tickers.length === 0 && cashBalance <= 0) {
     return (
-      <div
-        className="opacity-0 animate-fade-in"
-        style={{ borderTop: '1px solid var(--text-primary)', padding: '40px 16px', textAlign: 'center' }}
-      >
-        <p
-          style={{
-            fontFamily: 'JetBrains Mono, monospace',
-            fontSize: '9px',
-            letterSpacing: '0.18em',
-            textTransform: 'uppercase',
-            color: 'var(--text-secondary)',
-          }}
-        >
-          티커를 추가해주세요
-        </p>
+      <div className="opacity-0 animate-fade-in" style={{ borderTop: '1px solid var(--text-primary)' }}>
+        <div style={{ padding: '32px 16px', textAlign: 'center' }}>
+          <p
+            style={{
+              fontFamily: 'JetBrains Mono, monospace',
+              fontSize: '9px',
+              letterSpacing: '0.18em',
+              textTransform: 'uppercase',
+              color: 'var(--text-secondary)',
+            }}
+          >
+            티커를 추가해주세요
+          </p>
+        </div>
+        <CashStarterPanel cashBalance={cashBalance} onCashBalanceChange={handleCashBalanceChange} />
       </div>
     );
   }
@@ -1040,6 +1379,7 @@ function TickerTable({ tickers, loading, tickerOrder, onReorder, onDelete }: Pro
     : watchlistView === 'watching'
       ? '관찰 중인 종목이 없습니다'
       : '티커를 추가해주세요';
+  const showCashHoldingRow = cashBalance > 0 && watchlistView === 'all';
 
   return (
     <div data-no-swipe className="opacity-0 animate-fade-in stagger-2">
@@ -1141,7 +1481,20 @@ function TickerTable({ tickers, loading, tickerOrder, onReorder, onDelete }: Pro
               ))}
             </div>
           </div>
+
+          <AllocationBreakdown
+            allocations={portfolioSummary.allocations}
+            cashBalance={cashBalance}
+            onCashBalanceChange={handleCashBalanceChange}
+          />
         </div>
+      )}
+
+      {!portfolioSummary && (
+        <CashStarterPanel
+          cashBalance={cashBalance}
+          onCashBalanceChange={handleCashBalanceChange}
+        />
       )}
 
       {/* ── Stats 2x2 (n-stats4) ── */}
@@ -1286,7 +1639,7 @@ function TickerTable({ tickers, loading, tickerOrder, onReorder, onDelete }: Pro
       <div
         style={{
           display: 'grid',
-          gridTemplateColumns: '24px 1fr auto auto',
+          gridTemplateColumns: HOLDING_ROW_COLUMNS,
           gap: '10px',
           padding: '6px 16px',
           borderBottom: '1px solid var(--text-secondary)',
@@ -1299,6 +1652,7 @@ function TickerTable({ tickers, loading, tickerOrder, onReorder, onDelete }: Pro
       >
         <span>#</span>
         <span>{viewLabel}</span>
+        <span />
         <span style={{ textAlign: 'right' }}>Value</span>
         <span style={{ textAlign: 'right' }}>P/L</span>
       </div>
@@ -1308,7 +1662,88 @@ function TickerTable({ tickers, loading, tickerOrder, onReorder, onDelete }: Pro
         onPointerUp={handleDragEnd}
         onPointerCancel={handleDragEnd}
       >
-        {visibleTickers.length === 0 && (
+        {showCashHoldingRow && (
+          <div
+            className="relative transition-all duration-150 opacity-0 animate-slide-up"
+            style={{
+              borderBottom: '1px solid var(--bg-tertiary)',
+              animationDelay: '0.25s',
+            }}
+          >
+            <button
+              type="button"
+              onClick={() => toggle(CASH_SYMBOL)}
+              style={{
+                display: 'grid',
+                gridTemplateColumns: HOLDING_ROW_COLUMNS,
+                gap: '10px',
+                alignItems: 'center',
+                padding: '8px 16px',
+                width: '100%',
+                background: 'transparent',
+                border: 'none',
+                cursor: 'pointer',
+                textAlign: 'left',
+              }}
+            >
+              <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '9px', color: 'var(--accent-blue)' }}>$</span>
+              <div style={{ minWidth: 0 }}>
+                <span
+                  style={{
+                    fontSize: '13px',
+                    fontWeight: 500,
+                    color: 'var(--text-primary)',
+                    display: 'block',
+                    whiteSpace: 'nowrap',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                  }}
+                >
+                  US Dollar Cash
+                </span>
+                <small
+                  style={{
+                    display: 'block',
+                    fontFamily: 'JetBrains Mono, monospace',
+                    fontSize: '8px',
+                    fontWeight: 400,
+                    color: 'var(--text-secondary)',
+                    letterSpacing: '0.1em',
+                    marginTop: '1px',
+                  }}
+                >
+                  CASH · USD ASSET
+                </small>
+              </div>
+              <span aria-hidden="true" />
+              <span
+                style={{
+                  textAlign: 'right',
+                  fontFamily: 'JetBrains Mono, monospace',
+                  fontSize: '11px',
+                  fontWeight: 500,
+                  color: 'var(--text-primary)',
+                }}
+              >
+                {format(cashBalance)}
+              </span>
+              <span style={{ textAlign: 'right', fontFamily: 'JetBrains Mono, monospace', fontSize: '10px', color: 'var(--text-secondary)' }}>0.00%</span>
+            </button>
+
+            <div
+              className={`transition-all duration-200 ease-out ${
+                expanded.has(CASH_SYMBOL) ? 'max-h-[240px] opacity-100 overflow-y-auto' : 'max-h-0 opacity-0 overflow-hidden'
+              }`}
+              style={{ borderTop: expanded.has(CASH_SYMBOL) ? '1px solid var(--bg-tertiary)' : undefined }}
+            >
+              <div className="px-4 pb-4 pt-3">
+                <CashStarterPanel cashBalance={cashBalance} onCashBalanceChange={handleCashBalanceChange} />
+              </div>
+            </div>
+          </div>
+        )}
+
+        {visibleTickers.length === 0 && !showCashHoldingRow && (
           <div
             style={{
               padding: '32px 16px',
@@ -1328,6 +1763,7 @@ function TickerTable({ tickers, loading, tickerOrder, onReorder, onDelete }: Pro
           const isUp = t.change >= 0;
           const isOpen = expanded.has(t.symbol);
           const symbolTrades = allTrades[t.symbol] || [];
+          const positionLabel = positionLabelFor(positionLabels, t.symbol);
           const pos = calcPosition(symbolTrades);
           const plPercent = pos.avgCost > 0 && pos.totalQty > 0 ? ((t.price - pos.avgCost) / pos.avgCost) * 100 : null;
           const plUp = plPercent !== null && plPercent >= 0;
@@ -1481,7 +1917,7 @@ function TickerTable({ tickers, loading, tickerOrder, onReorder, onDelete }: Pro
                       onClick={() => toggle(t.symbol)}
                       style={{
                         display: 'grid',
-                        gridTemplateColumns: '24px 1fr auto auto',
+                        gridTemplateColumns: HOLDING_ROW_COLUMNS,
                         gap: '10px',
                         alignItems: 'center',
                         padding: '8px 16px',
@@ -1537,6 +1973,8 @@ function TickerTable({ tickers, loading, tickerOrder, onReorder, onDelete }: Pro
                         </small>
                       </div>
 
+                      <LabelBadge label={positionLabel} />
+
                       {/* Value */}
                       <span
                         style={{
@@ -1571,6 +2009,38 @@ function TickerTable({ tickers, loading, tickerOrder, onReorder, onDelete }: Pro
                       style={{ borderTop: isOpen ? '1px solid var(--bg-tertiary)' : undefined }}
                     >
                       <div className="px-4 pb-4 pt-3 space-y-3">
+                        {/* Position label */}
+                        <div>
+                          <SectionLabel>종목 라벨</SectionLabel>
+                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, minmax(0, 1fr))', border: '1px solid var(--bg-tertiary)' }}>
+                            {POSITION_LABEL_OPTIONS.map((option, optionIndex) => (
+                              <button
+                                key={option.value}
+                                type="button"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  handlePositionLabelChange(t.symbol, option.value);
+                                }}
+                                style={{
+                                  minWidth: 0,
+                                  padding: '8px 4px',
+                                  border: 'none',
+                                  borderRight: optionIndex < POSITION_LABEL_OPTIONS.length - 1 ? '1px solid var(--bg-tertiary)' : undefined,
+                                  background: positionLabel === option.value ? option.color : 'transparent',
+                                  color: positionLabel === option.value ? 'var(--bg-primary)' : option.color,
+                                  fontFamily: 'JetBrains Mono, monospace',
+                                  fontSize: '7px',
+                                  letterSpacing: '0.04em',
+                                  textTransform: 'uppercase',
+                                  cursor: 'pointer',
+                                }}
+                              >
+                                {option.label}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
                         {/* Day Range Bar */}
                         <div>
                           <SectionLabel>일일 가격 범위</SectionLabel>

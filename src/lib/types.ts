@@ -84,3 +84,5 @@ export interface Trade {
   price: number;
   quantity: number;
 }
+
+export type PositionLabel = 'WATCH' | 'RESEARCH' | 'GROWTH' | 'CORE' | 'OVERWEIGHT';
